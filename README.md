@@ -120,8 +120,6 @@ offline.
 
 ### Running fully offline with Ollama
 
-Your GPU has 4 GB of VRAM, which comfortably fits a 3B model:
-
 ```bash
 ollama pull llama3.2:3b
 ```
