@@ -1,0 +1,18 @@
+# Web UI
+streamlit>=1.40
+
+# Document loading
+pypdf>=5.1
+
+# Embeddings - run locally and cost nothing
+# (torch is already installed with CUDA on this machine)
+sentence-transformers>=3.3
+numpy>=1.26
+
+python-dotenv>=1.0
+
+# --- Answer providers ------------------------------------------------------
+# Only the one you set as PROVIDER in llmqp/config.py is actually needed.
+google-genai>=1.0      # gemini    - free tier
+anthropic>=1.0         # anthropic - paid
+# ollama needs no package: it is reached over plain HTTP on localhost
