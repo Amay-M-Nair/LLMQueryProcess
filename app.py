@@ -88,8 +88,21 @@ def apply_theme(mode: str) -> None:
 
           /* Set the inherited colour too, so anything not styled below still
              lands the right way up in dark mode. */
+          [data-testid="stApp"],
           [data-testid="stAppViewContainer"],
           [data-testid="stHeader"] {{ background: {c['bg']}; color: {c['text']}; }}
+
+          /* Text inputs and selects paint their own shell from the base
+             theme, which shows as a dark slab and a dark dropdown arrow on a
+             light page. Their outer testids are stable; the divs inside carry
+             only build-specific emotion classes, so they are reached through
+             the parent. */
+          [data-testid="stTextInputRootElement"],
+          [data-testid="stTextInputRootElement"] > div,
+          [data-testid="stSelectbox"] > div > div,
+          [data-testid="stSelectbox"] [role="combobox"] {{
+            background: {c['bg']} !important;
+          }}
           [data-testid="stSidebar"] {{
             background: {c['panel']};
             border-right: 1px solid {c['rule']};
@@ -192,11 +205,37 @@ def apply_theme(mode: str) -> None:
             background: transparent;
             padding: 0.3rem 0 1rem 0;
           }}
+          /* The bar the chat input sits in is painted from the base theme,
+             which is dark, so in the light palette it stayed a black band
+             across the bottom of a white page. The element carries no test id
+             of its own - only a build-specific emotion class - so it is
+             reached through the container that does. */
+          [data-testid="stBottom"],
+          [data-testid="stBottom"] > div,
+          [data-testid="stBottomBlockContainer"] {{
+            background: {c['bg']} !important;
+          }}
+
           [data-testid="stChatInput"] {{
             background: {c['bg']};
             border: 1px solid {c['rule']};
           }}
+          /* The box the text actually sits in is a nameless div one level
+             down, painted the base theme's panel colour - a dark slab inside
+             an otherwise light page. Same for the send button, which carried
+             the dark theme's text colour at 40% opacity and disappeared
+             against paper. */
+          [data-testid="stChatInput"] > div {{
+            background: {c['bg']} !important;
+          }}
           [data-testid="stChatInput"] textarea {{ color: {c['text']} !important; }}
+          [data-testid="stChatInputSubmitButton"] {{
+            color: {c['text']} !important;
+            background: transparent !important;
+          }}
+          [data-testid="stChatInputSubmitButton"] [data-testid="stIconMaterial"] {{
+            color: {c['text']} !important;
+          }}
 
           [data-testid="stExpander"] {{
             border: 1px solid {c['rule']};
