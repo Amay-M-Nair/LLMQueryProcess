@@ -4,11 +4,11 @@ Adding a new one means writing a Provider subclass and adding a line to
 PROVIDERS below. Nothing else in the project needs to change.
 """
 
-from .. import config
-from .anthropic_provider import AnthropicProvider
-from .base import Provider, ProviderError, ProviderNotReady
-from .gemini import GeminiProvider
-from .ollama import OllamaProvider
+from backend.providers.anthropic_provider import AnthropicProvider
+from backend.providers.base import Provider, ProviderError, ProviderNotReady
+from backend.providers.gemini import GeminiProvider
+from backend.providers.ollama import OllamaProvider
+from utils import config
 
 PROVIDERS: dict[str, type[Provider]] = {
     "gemini": GeminiProvider,

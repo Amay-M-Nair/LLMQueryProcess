@@ -2,9 +2,9 @@
 
 from typing import Iterator
 
-from . import config
-from .chunker import Chunk
-from .providers import Provider, ProviderError, ProviderNotReady, get_provider
+from backend.llm import Provider, ProviderError, ProviderNotReady, get_provider
+from ingestion.chunker import Chunk
+from utils import config
 
 __all__ = [
     "ProviderError",

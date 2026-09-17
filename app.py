@@ -2,16 +2,17 @@
 
 import streamlit as st
 
-from llmqp import answerer, config
-from llmqp.ingest import build_index, retrieve
-from llmqp.providers import (
+from backend import rag
+from backend.llm import (
     PROVIDERS,
     ProviderError,
     ProviderNotReady,
     get_provider,
     model_for,
 )
-from llmqp.store import VectorStore
+from ingestion.pipeline import build_index, retrieve
+from utils import config
+from vectorstore.faiss_store import VectorStore
 
 st.set_page_config(page_title="Document Q&A", layout="wide")
 
@@ -150,13 +151,13 @@ if question:
         if not retrieved:
             st.warning(
                 "Nothing in your documents was close enough to that question. "
-                "Try rephrasing, or lower MIN_SIMILARITY in llmqp/config.py."
+                "Try rephrasing, or lower MIN_SIMILARITY in utils/config.py."
             )
         else:
             answer = None
             try:
                 answer = st.write_stream(
-                    answerer.stream_answer(question, retrieved, provider=provider)
+                    rag.stream_answer(question, retrieved, provider=provider)
                 )
             except (ProviderNotReady, ProviderError) as exc:
                 st.error(str(exc))

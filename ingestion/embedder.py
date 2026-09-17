@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from . import config
+from utils import config
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer

@@ -12,7 +12,10 @@ numpy>=1.26
 python-dotenv>=1.0
 
 # --- Answer providers ------------------------------------------------------
-# Only the one you set as PROVIDER in llmqp/config.py is actually needed.
+# Only the one you set as PROVIDER in utils/config.py is actually needed.
 google-genai>=1.0      # gemini    - free tier
 anthropic>=1.0         # anthropic - paid
 # ollama needs no package: it is reached over plain HTTP on localhost
+
+# Vector index
+faiss-cpu>=1.9

@@ -1,13 +1,13 @@
 """Setup checker.  Run it with:
 
-    .venv/Scripts/python.exe -m llmqp.check
-    .venv/Scripts/python.exe -m llmqp.check --models
+    .venv/Scripts/python.exe -m utils.check
+    .venv/Scripts/python.exe -m utils.check --models
 """
 
 import sys
 
-from . import config
-from .providers import PROVIDERS, ProviderNotReady, get_provider, model_for
+from backend.llm import PROVIDERS, ProviderNotReady, get_provider, model_for
+from utils import config
 
 
 def main(argv: list[str]) -> int:

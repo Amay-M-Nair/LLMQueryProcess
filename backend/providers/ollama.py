@@ -13,8 +13,8 @@ import urllib.error
 import urllib.request
 from typing import Iterator
 
-from .. import config
-from .base import Provider, ProviderError, ProviderNotReady
+from backend.providers.base import Provider, ProviderError, ProviderNotReady
+from utils import config
 
 
 class OllamaProvider(Provider):

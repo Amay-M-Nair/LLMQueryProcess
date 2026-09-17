@@ -3,8 +3,8 @@
 import os
 from typing import Iterator
 
-from .. import config
-from .base import Provider, ProviderError, ProviderNotReady
+from backend.providers.base import Provider, ProviderError, ProviderNotReady
+from utils import config
 
 
 class AnthropicProvider(Provider):
@@ -18,7 +18,7 @@ class AnthropicProvider(Provider):
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise ProviderNotReady(
                 "No ANTHROPIC_API_KEY found. Add it to your .env file, or set "
-                'PROVIDER = "gemini" in llmqp/config.py to use the free tier.'
+                'PROVIDER = "gemini" in utils/config.py to use the free tier.'
             )
 
     def stream(self, system: str, prompt: str) -> Iterator[str]:

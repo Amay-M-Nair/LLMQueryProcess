@@ -54,7 +54,7 @@ related passage" — even when the question and the document share no words.
    Check it worked:
 
    ```bash
-   .venv/Scripts/python.exe -m llmqp.check
+   .venv/Scripts/python.exe -m utils.check
    ```
 
 3. Run it:
@@ -73,7 +73,7 @@ The first run downloads the embedding model (~90 MB), once.
 | File | Job |
 |---|---|
 | `app.py` | The web page — all Streamlit code lives here and nowhere else |
-| `llmqp/config.py` | Every tunable number in one place |
+| `utils/config.py` | Every tunable number in one place |
 | `llmqp/loaders.py` | File → pages of text |
 | `llmqp/chunker.py` | Pages → overlapping chunks |
 | `llmqp/embedder.py` | Text → vectors |
@@ -81,7 +81,7 @@ The first run downloads the embedding model (~90 MB), once.
 | `llmqp/ingest.py` | Ties the pipeline together; `build_index` and `retrieve` |
 | `llmqp/answerer.py` | Builds the prompt, hands it to the chosen provider |
 | `llmqp/providers/` | One adapter per answer model (Gemini, Ollama, Claude) |
-| `llmqp/check.py` | `python -m llmqp.check` - tells you what's set up |
+| `llmqp/check.py` | `python -m utils.check` - tells you what's set up |
 
 Because the UI is confined to `app.py`, you can drive the same pipeline from a
 script, a notebook, or a CLI without touching any of it.
@@ -97,7 +97,7 @@ switching providers changes nothing else in the system.
 | `ollama` | Free forever | Ollama running locally | Offline and private, but a 3B model follows the citation rules less reliably |
 | `anthropic` | ~$0.008-0.04/question | `ANTHROPIC_API_KEY` | Costs money; best instruction-following |
 
-Set it in `llmqp/config.py`, or pick it from the sidebar while the app is
+Set it in `utils/config.py`, or pick it from the sidebar while the app is
 running. To add a fourth, write a `Provider` subclass in `llmqp/providers/` and
 add one line to the registry in `llmqp/providers/__init__.py`.
 
@@ -107,10 +107,10 @@ The free tier allows roughly **20 requests per day, per model** — the quota id
 is `GenerateRequestsPerDayPerProjectPerModel-FreeTier`. That is a *daily* cap,
 not per-minute, and it is easy to hit while experimenting.
 
-Because it is *per model*, `GEMINI_FALLBACK_MODELS` in `llmqp/config.py` is
+Because it is *per model*, `GEMINI_FALLBACK_MODELS` in `utils/config.py` is
 effectively your daily budget: the provider falls through the list when a model
 is exhausted or overloaded, so five models means roughly 100 questions a day.
-Add more model names from `python -m llmqp.check --models` to extend it.
+Add more model names from `python -m utils.check --models` to extend it.
 
 When a request is rejected the provider reads the `retryDelay` the API supplies
 and waits exactly that long before retrying, rather than guessing.
@@ -119,6 +119,8 @@ If you run out for the day, switch the sidebar to `ollama` and keep working
 offline.
 
 ### Running fully offline with Ollama
+
+Your GPU has 4 GB of VRAM, which comfortably fits a 3B model:
 
 ```bash
 ollama pull llama3.2:3b
@@ -129,7 +131,7 @@ RAM and slow to a crawl.
 
 ## Things worth tuning
 
-All in `llmqp/config.py`:
+All in `utils/config.py`:
 
 - **`CHUNK_WORDS`** (160) — **must stay under ~176 words.** The embedding model
   reads at most 256 tokens; anything beyond that is silently truncated, so

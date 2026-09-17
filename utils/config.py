@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()  # reads .env so API keys land in the environment
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-INDEX_DIR = PROJECT_ROOT / "index"
-UPLOAD_DIR = PROJECT_ROOT / "uploads"
+DATA_DIR = PROJECT_ROOT / "data"
+INDEX_DIR = DATA_DIR / "index"
+UPLOAD_DIR = DATA_DIR / "uploads"
 
 # --- Retrieval (runs locally, costs nothing) -------------------------------
 # A small, fast embedding model. 90 MB, downloads once on first use.

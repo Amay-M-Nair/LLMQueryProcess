@@ -13,8 +13,8 @@ import re
 import time
 from typing import Iterator
 
-from .. import config
-from .base import Provider, ProviderError, ProviderNotReady
+from backend.providers.base import Provider, ProviderError, ProviderNotReady
+from utils import config
 
 ENV_VARS = ("GOOGLE_API_KEY", "GEMINI_API_KEY")
 
@@ -160,7 +160,7 @@ class GeminiProvider(Provider):
             raise ProviderError(
                 f"Gemini free-tier quota exceeded on: {tried}.{cap} "
                 "The quota is per model, so adding another model to "
-                "GEMINI_FALLBACK_MODELS in llmqp/config.py buys more headroom. "
+                "GEMINI_FALLBACK_MODELS in utils/config.py buys more headroom. "
                 "Otherwise switch the provider in the sidebar, or wait for the "
                 "quota to reset."
             )
@@ -216,9 +216,9 @@ def _explain(exc, model: str) -> str:
     if code == 404:
         return (
             f"Gemini rejected the model name {model!r} - it may have been "
-            f"retired ({message}). Run `.venv/Scripts/python.exe -m llmqp.check "
+            f"retired ({message}). Run `.venv/Scripts/python.exe -m utils.check "
             "--models` to list what your key can use, then set GEMINI_MODEL in "
-            "llmqp/config.py."
+            "utils/config.py."
         )
     if code in (401, 403):
         return f"Gemini rejected the API key: {message}"

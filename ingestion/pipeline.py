@@ -6,9 +6,11 @@ from typing import Callable
 
 import numpy as np
 
-from . import config, embedder, loaders
-from .chunker import Chunk, chunk_pages
-from .store import VectorStore
+from ingestion import document_loader as loaders
+from ingestion import embedder
+from ingestion.chunker import Chunk, chunk_pages
+from utils import config
+from vectorstore.faiss_store import VectorStore
 
 
 @dataclass
@@ -77,7 +79,7 @@ def build_index(
                 "config",
                 f"CHUNK_WORDS is {config.CHUNK_WORDS} but the embedding model "
                 f"only reads the first ~{capacity} words of a chunk - the rest "
-                "is invisible to search. Lower CHUNK_WORDS in llmqp/config.py.",
+                "is invisible to search. Lower CHUNK_WORDS in utils/config.py.",
             ))
         if on_progress:
             on_progress(f"Embedding {len(new_chunks)} chunks")

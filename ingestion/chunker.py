@@ -6,7 +6,7 @@ the cost of a few short chunks at the end of each page.
 
 from dataclasses import asdict, dataclass
 
-from . import config
+from utils import config
 
 
 @dataclass

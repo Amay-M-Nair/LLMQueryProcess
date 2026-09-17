@@ -9,9 +9,9 @@ from pathlib import Path
 
 import numpy as np
 
-from . import config
-from .chunker import Chunk
-from .keyword import BM25
+from ingestion.chunker import Chunk
+from utils import config
+from vectorstore.keyword import BM25
 
 VECTORS_FILE = "vectors.npy"
 CHUNKS_FILE = "chunks.json"
