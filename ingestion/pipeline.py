@@ -4,13 +4,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-import numpy as np
-
 from ingestion import document_loader as loaders
 from ingestion import embedder
 from ingestion.chunker import Chunk, chunk_pages
 from utils import config
 from vectorstore.faiss_store import VectorStore
+from vectorstore.metadata_store import DocumentRecord, hash_file
 
 
 @dataclass
@@ -18,9 +17,14 @@ class IngestReport:
     """What happened during an ingest, so the UI can report it honestly."""
 
     indexed: list[str] = field(default_factory=list)
+    reindexed: list[str] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)  # (name, reason)
     chunks_added: int = 0
     total_chunks: int = 0
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.indexed or self.reindexed)
 
 
 def build_index(
@@ -30,20 +34,31 @@ def build_index(
 ) -> tuple[VectorStore, IngestReport]:
     """Read each file, chunk it, embed the chunks, add them to the store.
 
-    Files whose name is already in the index are skipped, so re-running this
-    after adding one new document is cheap.
+    A file is identified by its contents, not its name. Re-adding the same
+    bytes is skipped; re-adding a file whose contents changed replaces the
+    chunks already held under that name, so an edited document does not leave
+    a stale copy of itself in the index to be retrieved later.
     """
     report = IngestReport()
-    already_indexed = set(existing.sources) if existing else set()
-    new_chunks: list[Chunk] = []
+    store = existing if existing is not None else VectorStore()
+
+    capacity = None  # looked up lazily; it loads the embedding model
 
     for path in paths:
         path = Path(path)
         name = path.name
 
-        if name in already_indexed:
+        try:
+            content_hash = hash_file(path)
+        except OSError as exc:
+            report.skipped.append((name, f"could not read: {exc}"))
+            continue
+
+        if store.is_current(name, content_hash):
             report.skipped.append((name, "already indexed"))
             continue
+
+        replacing = store.has_name(name)
 
         if on_progress:
             on_progress(f"Reading {name}")
@@ -69,35 +84,45 @@ def build_index(
             report.skipped.append((name, "produced no text chunks"))
             continue
 
-        new_chunks.extend(chunks)
-        report.indexed.append(name)
+        if capacity is None:
+            capacity = embedder.max_input_words()
+            if config.CHUNK_WORDS > capacity:
+                report.skipped.append((
+                    "config",
+                    f"CHUNK_WORDS is {config.CHUNK_WORDS} but the embedding model "
+                    f"only reads the first ~{capacity} words of a chunk - the rest "
+                    "is invisible to search. Lower CHUNK_WORDS in utils/config.py.",
+                ))
 
-    if new_chunks:
-        capacity = embedder.max_input_words()
-        if config.CHUNK_WORDS > capacity:
-            report.skipped.append((
-                "config",
-                f"CHUNK_WORDS is {config.CHUNK_WORDS} but the embedding model "
-                f"only reads the first ~{capacity} words of a chunk - the rest "
-                "is invisible to search. Lower CHUNK_WORDS in utils/config.py.",
-            ))
         if on_progress:
-            on_progress(f"Embedding {len(new_chunks)} chunks")
-        vectors = embedder.embed([c.text for c in new_chunks])
+            on_progress(f"Embedding {len(chunks)} chunks from {name}")
 
-        if existing and len(existing) > 0:
-            vectors = np.vstack([existing.vectors, vectors])
-            chunks = existing.chunks + new_chunks
-        else:
-            chunks = new_chunks
+        # Embed before touching the store. If this raises, the index is
+        # exactly as it was - a half-embedded document must never be left
+        # marked as indexed.
+        try:
+            vectors = embedder.embed([c.text for c in chunks])
+        except Exception as exc:
+            report.skipped.append((name, f"could not embed: {exc}"))
+            continue
 
-        store = VectorStore(vectors, chunks)
-    else:
-        store = existing or VectorStore(
-            np.zeros((0, config.EMBED_DIM), dtype="float32"), []
+        if replacing:
+            store.remove_document(name)
+
+        store.add(
+            vectors,
+            chunks,
+            DocumentRecord(
+                name=name,
+                content_hash=content_hash,
+                pages=len(pages),
+                chunk_count=len(chunks),
+            ),
         )
 
-    report.chunks_added = len(new_chunks)
+        report.chunks_added += len(chunks)
+        (report.reindexed if replacing else report.indexed).append(name)
+
     report.total_chunks = len(store)
     return store, report
 
@@ -131,5 +156,4 @@ def retrieve(
         # Small enough to send whole - rank for readable citation order only.
         return store.search(query_vector, len(store), query=question)
 
-    hits = store.search(query_vector, k, query=question)
-    return [(chunk, score) for chunk, score in hits if score >= min_similarity]
+    return store.search(query_vector, k, query=question, min_similarity=min_similarity)

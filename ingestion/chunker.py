@@ -11,9 +11,20 @@ from utils import config
 
 @dataclass
 class Chunk:
+    """One retrievable passage, and everything needed to cite it.
+
+    `chunk_id` follows the shape `employee_handbook_page4_chunk12` - unique
+    across the whole index, and readable enough to grep for in a debug panel.
+    The word range locates the chunk inside its page, which is what makes
+    overlapping neighbours distinguishable when two chunks look alike.
+    """
+
     text: str
-    source: str   # file name the chunk came from
-    page: int     # page number within that file
+    source: str        # file name the chunk came from
+    page: int          # page number within that file
+    chunk_id: str = ""
+    start_word: int = 0
+    end_word: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -21,6 +32,12 @@ class Chunk:
     @property
     def label(self) -> str:
         return f"{self.source} p.{self.page}"
+
+
+def _slug(source: str) -> str:
+    """A file name reduced to something safe to embed in an identifier."""
+    stem = source.rsplit(".", 1)[0]
+    return "".join(c if c.isalnum() else "_" for c in stem).strip("_").lower()
 
 
 def chunk_pages(
@@ -43,6 +60,7 @@ def chunk_pages(
         raise ValueError("overlap_words must be smaller than chunk_words")
 
     step = chunk_words - overlap_words
+    slug = _slug(source)
     chunks: list[Chunk] = []
 
     for page_number, text in pages:
@@ -55,7 +73,14 @@ def chunk_pages(
             if start > 0 and len(window) < overlap_words:
                 break
             chunks.append(
-                Chunk(text=" ".join(window), source=source, page=page_number)
+                Chunk(
+                    text=" ".join(window),
+                    source=source,
+                    page=page_number,
+                    chunk_id=f"{slug}_page{page_number}_chunk{len(chunks)}",
+                    start_word=start,
+                    end_word=start + len(window),
+                )
             )
 
     return chunks

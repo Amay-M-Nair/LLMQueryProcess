@@ -29,6 +29,13 @@ TOP_K = 5                  # how many chunks to hand the model
 # the index is relevant, which invites the model to answer from noise.
 MIN_SIMILARITY = 0.12
 
+# ... but a chunk can be a decisive keyword match and still score badly on
+# cosine - "who is Ingrid Halvorsen?" against a page that names her once.
+# A chunk whose keyword score reaches this fraction of the best keyword score
+# in the candidate set survives MIN_SIMILARITY on that evidence alone.
+# Lower it to rescue more, raise it towards 1.0 to rescue only exact hits.
+KEYWORD_RESCUE = 0.6
+
 # If the whole index is smaller than this, skip retrieval and send everything.
 # A short document does not need compressing, and retrieving over one can only
 # lose information. Raise it if your model has a large context window.
@@ -38,6 +45,15 @@ FULL_CONTEXT_WORDS = 4000
 # ranking. 0.0 = pure meaning, 1.0 = pure keyword. Keywords matter for lookups
 # like a name or an error code; meaning matters for everything else.
 KEYWORD_WEIGHT = 0.35
+
+# Blending BM25 into the ranking needs a candidate set that already contains
+# the chunk which wins on keywords. Up to this many chunks the store scores
+# every one of them, so the blend is exact. Past it, it takes a pool of the
+# best vector matches instead - fast, but a chunk that only a keyword would
+# have found can fall outside the pool and be missed.
+HYBRID_EXACT_LIMIT = 20000
+HYBRID_POOL_MULTIPLIER = 8   # pool = TOP_K * this ...
+HYBRID_POOL_MIN = 50         # ... but never smaller than this
 
 # --- Which model writes the answer -----------------------------------------
 # "gemini"    free tier, needs GOOGLE_API_KEY  -> https://aistudio.google.com/apikey

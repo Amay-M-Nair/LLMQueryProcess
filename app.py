@@ -12,7 +12,8 @@ from backend.llm import (
 )
 from ingestion.pipeline import build_index, retrieve
 from utils import config
-from vectorstore.faiss_store import VectorStore
+from vectorstore.faiss_store import INDEX_FILE, VectorStore
+from vectorstore.metadata_store import METADATA_FILE
 
 st.set_page_config(page_title="Document Q&A", layout="wide")
 
@@ -27,13 +28,22 @@ def render_sources(sources: list[tuple[str, float, str]]) -> None:
 
 # --- State -----------------------------------------------------------------
 if "store" not in st.session_state:
-    st.session_state.store = VectorStore.load(config.INDEX_DIR)
+    try:
+        st.session_state.store = VectorStore.load(config.INDEX_DIR)
+    except Exception as exc:
+        # An index left by an older version, or a half-written one. Say so
+        # rather than crashing on load with a stack trace.
+        st.session_state.store = None
+        st.session_state.load_error = str(exc)
 if "history" not in st.session_state:
     st.session_state.history = []
 if "provider_name" not in st.session_state:
     st.session_state.provider_name = config.PROVIDER
 
 store: VectorStore | None = st.session_state.store
+
+if st.session_state.get("load_error"):
+    st.error(f"Could not open the saved index: {st.session_state.load_error}")
 
 
 # --- Sidebar ---------------------------------------------------------------
@@ -66,9 +76,11 @@ with st.sidebar:
             store = new_store
 
             status.update(label=f"Added {report.chunks_added} chunks", state="complete")
+            for name in report.reindexed:
+                st.info(f"Re-indexed **{name}** - its contents had changed")
             for name, reason in report.skipped:
                 st.warning(f"Skipped **{name}** - {reason}")
-            if report.indexed:
+            if report.changed:
                 st.rerun()
         except Exception as exc:
             status.update(label="Indexing failed", state="error")
@@ -79,14 +91,24 @@ with st.sidebar:
     if store and len(store) > 0:
         st.metric("Chunks indexed", len(store))
         st.caption("Files in the index:")
-        for name in store.sources:
-            st.caption(f"- {name}")
+        for name, record in store.documents.items():
+            count = record.chunk_count
+            st.caption(f"- {name} ({count} chunk{'' if count == 1 else 's'})")
 
         if st.button("Clear index"):
-            for filename in ("vectors.npy", "chunks.json"):
+            for filename in (INDEX_FILE, METADATA_FILE):
                 (config.INDEX_DIR / filename).unlink(missing_ok=True)
             st.session_state.store = None
             st.session_state.history = []
+            st.session_state.load_error = None
+            st.rerun()
+    elif st.session_state.get("load_error"):
+        # The index exists but could not be opened, so the usual Clear button
+        # above is out of reach - offer it here or there is no way out.
+        if st.button("Delete the unreadable index"):
+            for filename in (INDEX_FILE, METADATA_FILE):
+                (config.INDEX_DIR / filename).unlink(missing_ok=True)
+            st.session_state.load_error = None
             st.rerun()
     else:
         st.info("No documents indexed yet. Upload a file above to start.")

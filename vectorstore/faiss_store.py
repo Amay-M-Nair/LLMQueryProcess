@@ -1,106 +1,204 @@
-"""A minimal vector store: one numpy array of vectors, one list of chunks.
+"""The vector index: FAISS for the vectors, MetadataStore for everything else.
 
-Plenty fast for tens of thousands of chunks. If this project ever outgrows
-that, this is the single file you would swap for FAISS or Chroma.
+Vectors arrive unit-normalised from the embedder, which is what makes
+`IndexFlatIP` (inner product) return exactly the cosine similarity - no
+approximation, no training step, and the numbers shown in the UI mean what
+they say.
+
+`IndexFlat` also stores the vectors themselves, so it is the single source of
+truth: removing a document rebuilds the index from the rows that survive
+rather than keeping a shadow copy of everything in numpy.
 """
 
-import json
 from pathlib import Path
 
 import numpy as np
 
 from ingestion.chunker import Chunk
 from utils import config
-from vectorstore.keyword import BM25
+from vectorstore.metadata_store import DocumentRecord, MetadataStore
 
-VECTORS_FILE = "vectors.npy"
-CHUNKS_FILE = "chunks.json"
+INDEX_FILE = "index.faiss"
+
+
+def _new_index():
+    import faiss
+
+    return faiss.IndexFlatIP(config.EMBED_DIM)
 
 
 class VectorStore:
-    def __init__(self, vectors: np.ndarray, chunks: list[Chunk]):
-        if len(vectors) != len(chunks):
+    def __init__(self, index=None, metadata: MetadataStore | None = None):
+        self.index = index if index is not None else _new_index()
+        self.metadata = metadata if metadata is not None else MetadataStore()
+        if self.index.ntotal != len(self.metadata):
             raise ValueError(
-                f"{len(vectors)} vectors but {len(chunks)} chunks - they must match"
+                f"{self.index.ntotal} vectors but {len(self.metadata)} chunks - "
+                "the index and its metadata are out of step. Clear the index "
+                "and re-add your documents."
             )
-        self.vectors = vectors
-        self.chunks = chunks
-        self._bm25: BM25 | None = None
 
     def __len__(self) -> int:
-        return len(self.chunks)
+        return self.index.ntotal
+
+    # --- Read-through to the metadata -------------------------------------
+
+    @property
+    def chunks(self) -> list[Chunk]:
+        return self.metadata.chunks
 
     @property
     def sources(self) -> list[str]:
-        """Distinct file names in the index, in insertion order."""
-        seen: dict[str, None] = {}
-        for chunk in self.chunks:
-            seen.setdefault(chunk.source, None)
-        return list(seen)
+        return self.metadata.sources
+
+    @property
+    def documents(self) -> dict[str, DocumentRecord]:
+        return self.metadata.documents
 
     @property
     def total_words(self) -> int:
-        return sum(len(chunk.text.split()) for chunk in self.chunks)
+        return self.metadata.total_words
 
-    @property
-    def bm25(self) -> BM25:
-        """Built on first use and cached - cheap, but not free."""
-        if self._bm25 is None:
-            self._bm25 = BM25([chunk.text for chunk in self.chunks])
-        return self._bm25
+    def is_current(self, name: str, content_hash: str) -> bool:
+        return self.metadata.is_current(name, content_hash)
+
+    def has_name(self, name: str) -> bool:
+        return self.metadata.has_name(name)
+
+    # --- Writing -----------------------------------------------------------
+
+    def add(
+        self, vectors: np.ndarray, chunks: list[Chunk], document: DocumentRecord
+    ) -> None:
+        if len(vectors) != len(chunks):
+            raise ValueError(f"{len(vectors)} vectors but {len(chunks)} chunks")
+        self.index.add(np.ascontiguousarray(vectors, dtype="float32"))
+        self.metadata.add(chunks, document)
+
+    def remove_document(self, name: str) -> int:
+        """Drop a document and its vectors. Returns how many chunks went.
+
+        `IndexFlat` supports `remove_ids`, but it renumbers the rows left
+        behind, which is exactly the kind of implicit reindexing that gets the
+        metadata out of step. Rebuilding from the surviving vectors is a few
+        milliseconds at this scale and cannot drift.
+        """
+        doomed = set(self.metadata.positions_for(name))
+        if not doomed:
+            return 0
+
+        keep = [i for i in range(len(self.metadata)) if i not in doomed]
+        survivors = (
+            self.index.reconstruct_n(0, self.index.ntotal)[keep]
+            if keep
+            else np.zeros((0, config.EMBED_DIM), dtype="float32")
+        )
+
+        self.index = _new_index()
+        if len(survivors):
+            self.index.add(np.ascontiguousarray(survivors, dtype="float32"))
+        self.metadata.keep(keep)
+        return len(doomed)
+
+    # --- Searching ---------------------------------------------------------
 
     def search(
-        self, query_vector: np.ndarray, k: int, query: str | None = None
+        self,
+        query_vector: np.ndarray,
+        k: int,
+        query: str | None = None,
+        min_similarity: float | None = None,
     ) -> list[tuple[Chunk, float]]:
         """Rank chunks by meaning, and by keyword overlap when a query is given.
 
         The returned score is always the cosine similarity, so it stays
         comparable and readable in the UI - the keyword signal affects the
-        ordering, not the number shown.
+        ordering, not the number shown. Ordering by one number and reporting
+        another does mean the scores you see need not descend.
+
+        `min_similarity` drops chunks nothing like the question. It is applied
+        here rather than by the caller because this is the only place that can
+        see both signals: a chunk can be a decisive keyword match and still
+        score poorly on cosine, and dropping it on the cosine alone would
+        throw away the exact case BM25 is here to catch.
         """
-        if len(self) == 0:
+        total = len(self)
+        if total == 0:
             return []
 
-        # Both sides are unit vectors, so this dot product IS cosine similarity.
-        cosine = self.vectors @ query_vector.ravel()
-        ranking = cosine
+        k = min(k, total)
 
+        # Blending BM25 needs a candidate set wide enough that a chunk which
+        # wins on keywords is in it at all. Below the limit we simply take
+        # every chunk, which makes the blend exact; above it, a pool.
+        if query and total <= config.HYBRID_EXACT_LIMIT:
+            pool = total
+        elif query:
+            pool = min(total, max(k * config.HYBRID_POOL_MULTIPLIER, config.HYBRID_POOL_MIN))
+        else:
+            pool = k
+
+        probe = np.ascontiguousarray(query_vector, dtype="float32").reshape(1, -1)
+        cosine, ids = self.index.search(probe, pool)
+        cosine, ids = cosine[0], ids[0]
+
+        # FAISS pads the tail with -1 when it finds fewer than `pool` results.
+        found = ids >= 0
+        cosine, ids = cosine[found], ids[found]
+        if not len(ids):
+            return []
+
+        lexical = None
         if query:
-            lexical = self.bm25.scores(query)
-            if lexical.max() > 0:
+            raw = self.metadata.bm25.scores(query)[ids]
+            if raw.max() > 0:
                 # Put both on a 0-1 scale before blending, since BM25 scores
                 # are unbounded while cosine is not.
-                lexical = lexical / lexical.max()
+                lexical = raw / raw.max()
                 spread = cosine.max() - cosine.min()
                 dense = (cosine - cosine.min()) / spread if spread else cosine * 0
-                ranking = (1 - config.KEYWORD_WEIGHT) * dense + config.KEYWORD_WEIGHT * lexical
+                ranking = (
+                    (1 - config.KEYWORD_WEIGHT) * dense
+                    + config.KEYWORD_WEIGHT * lexical
+                )
+                order = np.argsort(-ranking)
+                cosine, ids, lexical = cosine[order], ids[order], lexical[order]
 
-        k = min(k, len(ranking))
-        # argpartition finds the top k without sorting all of them, then we
-        # sort just those k.
-        top = np.argpartition(-ranking, k - 1)[:k]
-        top = top[np.argsort(-ranking[top])]
+        if min_similarity is not None:
+            related = cosine >= min_similarity
+            if lexical is not None:
+                # Rescue the strong keyword matches. BM25 already discounts
+                # words that appear everywhere, so a chunk only gets near the
+                # top of this scale by containing the distinctive words of the
+                # question - which is reason enough to show it, whatever the
+                # vectors think.
+                related |= lexical >= config.KEYWORD_RESCUE
+            cosine, ids = cosine[related], ids[related]
 
-        return [(self.chunks[i], float(cosine[i])) for i in top]
+        return [
+            (self.metadata.chunks[int(i)], float(score))
+            for i, score in zip(ids[:k], cosine[:k])
+        ]
+
+    # --- Persistence -------------------------------------------------------
 
     def save(self, directory: Path) -> None:
+        import faiss
+
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
-        np.save(directory / VECTORS_FILE, self.vectors)
-        (directory / CHUNKS_FILE).write_text(
-            json.dumps([c.to_dict() for c in self.chunks], ensure_ascii=False),
-            encoding="utf-8",
-        )
+        faiss.write_index(self.index, str(directory / INDEX_FILE))
+        self.metadata.save(directory)
 
     @classmethod
     def load(cls, directory: Path) -> "VectorStore | None":
         """Load a saved index, or None if there isn't one yet."""
+        import faiss
+
         directory = Path(directory)
-        vectors_path = directory / VECTORS_FILE
-        chunks_path = directory / CHUNKS_FILE
-        if not vectors_path.exists() or not chunks_path.exists():
+        index_path = directory / INDEX_FILE
+        metadata = MetadataStore.load(directory)
+        if not index_path.exists() or metadata is None:
             return None
 
-        vectors = np.load(vectors_path)
-        raw = json.loads(chunks_path.read_text(encoding="utf-8"))
-        return cls(vectors, [Chunk(**item) for item in raw])
+        return cls(faiss.read_index(str(index_path)), metadata)
