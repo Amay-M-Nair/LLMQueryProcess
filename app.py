@@ -23,9 +23,12 @@ from vectorstore.faiss_store import INDEX_FILE, VectorStore
 from vectorstore.metadata_store import METADATA_FILE
 
 APP_NAME = "Azriel"
+APP_MARK = "Ω"   # omega, the tab icon and the sidebar lockup
+ICON = config.PROJECT_ROOT / "assets" / "omega.svg"
 
 st.set_page_config(
     page_title=APP_NAME,
+    page_icon=str(ICON) if ICON.exists() else APP_MARK,
     layout="centered",
     initial_sidebar_state="expanded",
 )
@@ -143,12 +146,22 @@ def apply_theme(mode: str) -> None:
             display: flex;
             align-items: center;
           }}
+          /* The mark and the name as one lockup, set in two pseudo-elements
+             so the symbol can carry more weight than the word beside it. */
           [data-testid="stLogoSpacer"]::before {{
+            content: "{APP_MARK}";
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 1.3rem;
+            line-height: 1;
+            color: {c['text']};
+          }}
+          [data-testid="stLogoSpacer"]::after {{
             content: "Azriel";
             font-family: 'Fraunces', Georgia, serif;
             font-size: 1.05rem;
             font-weight: 500;
             letter-spacing: 0.01em;
+            margin-left: 0.45rem;
             color: {c['muted']};
           }}
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- The tab icon. The glyph is used rather than a hand-drawn path: every
+       standard font carries omega, and a real letterform beats an
+       approximation of one at 16 pixels. -->
+  <rect width="64" height="64" rx="14" fill="#14181a"/>
+  <text x="32" y="34" fill="#e8e6e1"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="42" font-weight="500"
+        text-anchor="middle" dominant-baseline="central">&#937;</text>
+</svg>
