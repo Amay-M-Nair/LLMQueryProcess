@@ -1,4 +1,4 @@
-# LLM Query Processing & RAG
+# Azriel
 
 Ask questions about your own PDFs and notes. Answers come only from the files
 you upload, and every claim is cited back to the file and page it came from.
@@ -86,6 +86,7 @@ so any single piece can be replaced without disturbing the rest.
 | Layer | Module | Job |
 |---|---|---|
 | UI | `app.py` | The web page — all Streamlit code lives here and nowhere else |
+| | `.streamlit/config.toml` | Theme colours, changeable without reading any code |
 | **backend** | `intent_classifier.py` | What kind of question is this? |
 | | `router.py` | Which path should it take? |
 | | `calculator.py` | Arithmetic, worked out locally |

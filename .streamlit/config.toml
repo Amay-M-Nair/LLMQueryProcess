@@ -1,0 +1,15 @@
+# Presentation only. Everything here is safe to change without touching code.
+
+[theme]
+base = "light"
+primaryColor = "#2f3e46"           # ink - used for focus rings and the send button
+backgroundColor = "#fbfbfa"        # warm off-white, easier to read than pure white
+secondaryBackgroundColor = "#f2f2f0"
+textColor = "#1c2427"
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
