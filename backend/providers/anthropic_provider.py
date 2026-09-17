@@ -10,12 +10,17 @@ from utils import config
 class AnthropicProvider(Provider):
     name = "anthropic"
     note = "Paid (needs credit). Best instruction-following of the three."
+    key_variable = "ANTHROPIC_API_KEY"
 
-    def __init__(self, model: str = config.ANTHROPIC_MODEL):
+    def __init__(self, model: str = config.ANTHROPIC_MODEL, api_key: str | None = None):
         self.model = model
+        self.api_key = (api_key or "").strip() or None
+
+    def _key(self) -> str | None:
+        return self.api_key or os.environ.get("ANTHROPIC_API_KEY")
 
     def check_ready(self) -> None:
-        if not os.environ.get("ANTHROPIC_API_KEY"):
+        if not self._key():
             raise ProviderNotReady(
                 "No ANTHROPIC_API_KEY found. Add it to your .env file, or set "
                 'PROVIDER = "gemini" in utils/config.py to use the free tier.'
@@ -25,7 +30,7 @@ class AnthropicProvider(Provider):
         import anthropic
 
         self.check_ready()
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=self._key())
 
         request = dict(
             model=self.model,

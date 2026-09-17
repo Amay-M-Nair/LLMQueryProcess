@@ -1,5 +1,7 @@
 """The web page. Run it with:  streamlit run app.py"""
 
+import os
+
 import streamlit as st
 
 from backend import rag
@@ -39,6 +41,11 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "provider_name" not in st.session_state:
     st.session_state.provider_name = config.PROVIDER
+if "api_keys" not in st.session_state:
+    # Keys typed into the sidebar, per provider. Session state is held server
+    # side and per browser session, so one visitor's key is never handed to
+    # another - but it is also never persisted, by design.
+    st.session_state.api_keys = {}
 
 store: VectorStore | None = st.session_state.store
 
@@ -124,7 +131,47 @@ with st.sidebar:
         help="Retrieval always runs locally and is free. Only this step calls out.",
     )
 
-    provider = get_provider(st.session_state.provider_name)
+    provider_name = st.session_state.provider_name
+    keys = st.session_state.api_keys
+
+    # The key box exists so a deployed copy can ask each visitor for their own
+    # key rather than shipping one. Typed keys live in this browser session
+    # only: never written to disk, never logged, gone when the tab closes.
+    if get_provider(provider_name).needs_key:
+        variable = get_provider(provider_name).key_variable
+        from_env = bool(os.environ.get(variable))
+
+        typed = st.text_input(
+            "API key",
+            value=keys.get(provider_name, ""),
+            type="password",
+            placeholder="Using the key from .env" if from_env else f"Paste your {variable}",
+            help=(
+                "Overrides .env for this session only. Nothing is saved to "
+                "disk, so closing the tab forgets it."
+            ),
+        )
+        keys[provider_name] = typed
+
+        if typed:
+            st.caption("Using the key you entered (this session only).")
+        elif from_env:
+            st.caption(f"Using `{variable}` from your .env file.")
+
+        # "Ready" below only means a key is present. A key can be present and
+        # be a typo, expired, or out of quota - all of which look identical
+        # until the first question fails. This spends one request to find out,
+        # on a button so it is never spent behind your back.
+        if st.button("Test this key", help="Makes one real API call."):
+            candidate = get_provider(provider_name, api_key=typed or None)
+            with st.spinner("Calling the API..."):
+                try:
+                    reply = candidate.complete("Reply with the single word OK.", "Ready?")
+                    st.success(f"The key works. Replied: {reply.strip()[:40]!r}")
+                except Exception as exc:
+                    st.error(f"That key did not work: {exc}")
+
+    provider = get_provider(provider_name, api_key=keys.get(provider_name) or None)
     st.caption(f"Model: `{model_for(provider.name)}`")
     st.caption(provider.note)
 

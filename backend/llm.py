@@ -17,13 +17,23 @@ PROVIDERS: dict[str, type[Provider]] = {
 }
 
 
-def get_provider(name: str | None = None) -> Provider:
+def get_provider(name: str | None = None, api_key: str | None = None) -> Provider:
+    """Build a provider by name.
+
+    `api_key` overrides whatever the environment holds, which is what lets a
+    deployed copy ask each visitor for their own key instead of shipping one.
+    Providers that need no key ignore it.
+    """
     name = (name or config.PROVIDER).lower()
     if name not in PROVIDERS:
         raise ValueError(
             f"Unknown provider {name!r}. Available: {', '.join(PROVIDERS)}"
         )
-    return PROVIDERS[name]()
+
+    provider_class = PROVIDERS[name]
+    if api_key and provider_class.key_variable:
+        return provider_class(api_key=api_key)
+    return provider_class()
 
 
 def model_for(name: str) -> str:

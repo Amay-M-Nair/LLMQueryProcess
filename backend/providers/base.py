@@ -24,6 +24,13 @@ class Provider(ABC):
     name: str = "provider"
     #: Human-readable note shown in the UI (cost, privacy, etc.)
     note: str = ""
+    #: Environment variable the key is normally read from. None means this
+    #: provider needs no key at all, and the UI should not ask for one.
+    key_variable: str | None = None
+
+    @property
+    def needs_key(self) -> bool:
+        return self.key_variable is not None
 
     @abstractmethod
     def stream(self, system: str, prompt: str) -> Iterator[str]:

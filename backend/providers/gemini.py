@@ -83,11 +83,18 @@ def quota_limit(exc) -> str | None:
 class GeminiProvider(Provider):
     name = "gemini"
     note = "Free tier. Your documents are sent to Google."
+    key_variable = "GOOGLE_API_KEY"
 
-    def __init__(self, model: str = config.GEMINI_MODEL):
+    def __init__(self, model: str = config.GEMINI_MODEL, api_key: str | None = None):
         self.model = model
+        # A key passed in wins over the environment: it came from someone
+        # typing it into this session, which is a deliberate override of
+        # whatever .env holds.
+        self.api_key = (api_key or "").strip() or None
 
     def _api_key(self) -> str:
+        if self.api_key:
+            return self.api_key
         for var in ENV_VARS:
             key = os.environ.get(var)
             if key:
