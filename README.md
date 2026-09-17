@@ -87,7 +87,8 @@ so any single piece can be replaced without disturbing the rest.
 | | `chunker.py` | Pages → overlapping chunks |
 | | `embedder.py` | Text → vectors |
 | | `pipeline.py` | Ties the ingest together; `build_index` and `retrieve` |
-| **vectorstore** | `faiss_store.py` | Saving, loading, and similarity search |
+| **vectorstore** | `faiss_store.py` | The FAISS index: saving, loading, similarity search |
+| | `metadata_store.py` | Chunk records and the register of indexed documents |
 | | `keyword.py` | BM25 keyword scoring, blended into the ranking |
 | **utils** | `config.py` | Every tunable number in one place |
 | | `check.py` | `python -m utils.check` — tells you what is set up |
@@ -156,6 +157,9 @@ All in `utils/config.py`:
   and the whole index is sent. See below.
 - **`KEYWORD_WEIGHT`** (0.35) — how much literal word overlap counts against
   meaning when ranking. Raise it for documents full of names, codes and IDs.
+- **`KEYWORD_RESCUE`** (0.6) — how good a keyword match has to be to survive
+  `MIN_SIMILARITY` on its own. A chunk naming someone once is a real answer to
+  a question about them, however low its cosine.
 - **`PROVIDER`** (`gemini`) — which model writes the answer. Switchable in the
   sidebar at runtime too.
 
@@ -197,8 +201,6 @@ so it means one new module in `vectorstore/` and no changes anywhere else.
 - **Scanned PDFs do not work.** If a PDF is page images rather than text, there
   is nothing to extract; the app detects this and tells you. Fixing it needs an
   OCR step.
-- **Re-indexing is by filename.** A file whose name is already in the index is
-  skipped, even if its contents changed. Clear the index to force a rebuild.
 - **No reranking.** Ranking is vector similarity blended with BM25. A
   cross-encoder reranker over the top 20 would improve it further.
 - **Questions about a document, in a large corpus.** "Who wrote this?" works
@@ -212,12 +214,10 @@ so it means one new module in `vectorstore/` and no changes anywhere else.
 The layered structure above is groundwork for a query-processing layer that
 does not exist yet. Planned, in order:
 
-1. **FAISS index** with a proper metadata store, and content hashing so an
-   edited document is actually re-indexed.
-2. **Intent classification and routing** — send general questions straight to
+1. **Intent classification and routing** — send general questions straight to
    the model and document questions through retrieval, so both work.
-3. **Query rewriting** — resolve follow-ups like "what about its limitations?"
+2. **Query rewriting** — resolve follow-ups like "what about its limitations?"
    against the conversation so far.
-4. **Evaluation** — a small labelled dataset measuring intent accuracy,
+3. **Evaluation** — a small labelled dataset measuring intent accuracy,
    retrieval relevance, answer faithfulness and latency, to show the query
    layer earns its keep.
