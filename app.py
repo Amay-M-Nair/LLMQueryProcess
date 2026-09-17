@@ -61,8 +61,18 @@ def apply_theme(mode: str) -> None:
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap');
 
-          [data-testid="stToolbar"], footer, #MainMenu,
-          [data-testid="stDecoration"] {{ display: none; }}
+          /* Hide the chrome itself, never the toolbar that contains it.
+             Streamlit renders the button that reopens a collapsed sidebar
+             inside stToolbar, so display:none there makes collapsing the
+             sidebar a one-way door. */
+          [data-testid="stAppDeployButton"],
+          [data-testid="stMainMenu"], #MainMenu,
+          [data-testid="stToolbarActions"],
+          [data-testid="stDecoration"],
+          footer {{ display: none; }}
+
+          [data-testid="stExpandSidebarButton"] button {{ color: {c['muted']}; }}
+          [data-testid="stExpandSidebarButton"] button:hover {{ color: {c['text']}; }}
 
           /* Set the inherited colour too, so anything not styled below still
              lands the right way up in dark mode. */
@@ -148,6 +158,45 @@ def apply_theme(mode: str) -> None:
             background: {c['bg']};
             border: 1px dashed {c['rule']};
           }}
+
+          /* The base theme in .streamlit/config.toml is dark, because that is
+             what loads first and a white flash is worse than none. Streamlit
+             paints its own widget chrome from that base, so switching to the
+             light palette leaves dark buttons behind light text. Every widget
+             Streamlit colours itself has to be repainted here, or it turns
+             invisible in one theme or the other. */
+          [data-testid^="stBaseButton"],
+          [data-testid="stFileUploaderDropzone"] button,
+          [data-baseweb="input"] button,
+          [data-baseweb="base-input"] button,
+          [data-testid="stSidebarCollapseButton"] button,
+          [data-testid="stExpandSidebarButton"] button {{
+            background: {c['bg']} !important;
+            color: {c['text']} !important;
+            border-color: {c['rule']} !important;
+          }}
+          [data-testid^="stBaseButton"]:hover {{ border-color: {c['accent']} !important; }}
+          [data-testid="stBaseButton-primary"] {{
+            background: {c['accent']} !important;
+            color: {c['bg']} !important;
+          }}
+          /* A disabled primary button keeping its filled background put muted
+             text on the accent colour, which is nearly unreadable. Disabled
+             means it stops looking like the thing you should press. */
+          [data-testid="stBaseButton-primary"]:disabled {{
+            background: transparent !important;
+            color: {c['muted']} !important;
+            border-color: {c['rule']} !important;
+          }}
+          [data-baseweb="select"] div, [data-baseweb="popover"] li {{
+            color: {c['text']} !important;
+          }}
+          /* Streamlit's material icons carry their own colour on an inner
+             span, so setting it on the button they sit in does not reach
+             them: the collapse arrow and the show-password eye stayed the
+             base theme's colour and vanished in the other one. */
+          [data-testid="stIconMaterial"] {{ color: {c['muted']} !important; }}
+          button:hover [data-testid="stIconMaterial"] {{ color: {c['text']} !important; }}
           /* Streamlit hard-codes several colours for the light theme. Each of
              these leaked dark-on-dark or a light panel into the dark palette,
              so they are forced rather than merely set. */
