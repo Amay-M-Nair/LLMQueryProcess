@@ -1,11 +1,13 @@
-# Presentation only. Everything here is safe to change without touching code.
+# Presentation only. This is the theme Streamlit paints before app.py runs;
+# the palettes in app.py then take over. Keeping it dark avoids a white flash
+# on load.
 
 [theme]
-base = "light"
-primaryColor = "#2f3e46"           # ink - used for focus rings and the send button
-backgroundColor = "#fbfbfa"        # warm off-white, easier to read than pure white
-secondaryBackgroundColor = "#f2f2f0"
-textColor = "#1c2427"
+base = "dark"
+primaryColor = "#cfd8d5"
+backgroundColor = "#14181a"
+secondaryBackgroundColor = "#1b2023"
+textColor = "#e8e6e1"
 font = "sans serif"
 
 [server]

@@ -13,7 +13,7 @@ the app is exactly what gets measured.
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Callable, Iterator
 
 from backend import calculator, intent_classifier, query_rewriter, rag, router
 from backend.intent_classifier import Intent
@@ -82,14 +82,20 @@ def process(
     store: VectorStore | None = None,
     history: list[dict] | None = None,
     provider: Provider | None = None,
+    on_stage: Callable[[str], None] | None = None,
 ) -> Plan:
     """Preprocess, classify, route, and prepare the answer.
 
     No model is called for the answer here - the caller streams it - but
     classification and rewriting may each spend one call, and the trace
     records how many were spent.
+
+    `on_stage` is called with a short description before each step. Deciding
+    how to answer takes several seconds, most of it classification, and a
+    caller with no way to say what is happening can only show dead air.
     """
     history = history or []
+    say = on_stage or (lambda _message: None)
     query = preprocess(question)
     trace = QueryTrace(query=query)
 
@@ -102,6 +108,7 @@ def process(
         return Plan(trace, message="Ask a question to get started.")
 
     # --- What kind of question is this? ---
+    say("Working out what you are asking")
     with trace.timed("classify"):
         before = intent_classifier.classify_by_rule(query.cleaned, has_index)
         trace.intent = intent_classifier.classify(
@@ -118,6 +125,7 @@ def process(
 
     # --- Arithmetic never reaches a model ---
     if trace.route.name == router.CALCULATE:
+        say("Working it out")
         try:
             with trace.timed("calculate"):
                 return Plan(trace, answer=calculator.answer(query.cleaned))
@@ -140,6 +148,8 @@ def process(
 
     # --- Retrieval path ---
     if trace.route.name == router.RETRIEVAL:
+        if query_rewriter.needs_rewriting(query.cleaned, history):
+            say("Working out what the question refers to")
         with trace.timed("rewrite"):
             trace.rewrite = query_rewriter.rewrite(
                 query.cleaned, history, provider=provider
@@ -147,6 +157,7 @@ def process(
         if trace.rewrite.cost_a_call:
             trace.api_calls += 1
 
+        say(f"Searching {len(store)} passage{'' if len(store) == 1 else 's'}")
         with trace.timed("retrieve"):
             trace.retrieved = retrieve(store, trace.search_query, k=config.TOP_K)
 
@@ -160,6 +171,7 @@ def process(
             )
         else:
             trace.api_calls += 1
+            say(f"Writing from {len(trace.retrieved)} excerpts")
             return Plan(
                 trace,
                 stream=lambda: rag.stream_answer(
@@ -168,6 +180,7 @@ def process(
             )
 
     # --- Direct path ---
+    say("Writing")
     trace.api_calls += 1
     return Plan(
         trace,

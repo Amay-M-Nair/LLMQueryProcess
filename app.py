@@ -11,6 +11,7 @@ running, so dark mode is those tokens rendered as CSS over the base theme in
 """
 
 import os
+import re
 
 import streamlit as st
 
@@ -25,7 +26,7 @@ APP_NAME = "Azriel"
 
 st.set_page_config(
     page_title=APP_NAME,
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="expanded",
 )
 
@@ -72,14 +73,7 @@ def apply_theme(mode: str) -> None:
             border-right: 1px solid {c['rule']};
           }}
 
-          /* Left-aligned reading column rather than a centred one: the
-             wordmark and the text share a single left edge. */
-          .block-container {{
-            padding: 2.2rem 2rem 6rem 3.2rem;
-            max-width: 62rem;
-            margin-left: 0;
-          }}
-          .azriel-body {{ max-width: 44rem; }}
+          .block-container {{ padding-top: 3.5rem; max-width: 46rem; }}
 
           /* Streamlit styles headings specifically enough to win a plain
              class selector, so these are forced. Georgia is the fallback
@@ -87,24 +81,23 @@ def apply_theme(mode: str) -> None:
              load at all behind a proxy or offline. */
           h1.azriel-mark, .stMarkdown h1.azriel-mark {{
             font-family: 'Fraunces', Georgia, 'Times New Roman', serif !important;
-            font-size: 4.4rem !important;
-            font-weight: 600 !important;
-            line-height: 0.98 !important;
-            letter-spacing: -0.02em !important;
+            font-size: 2.1rem !important;
+            font-weight: 500 !important;
+            line-height: 1.1 !important;
+            letter-spacing: 0.01em !important;
             padding: 0 !important;
-            margin: 0 0 0.45rem -0.045em !important;
+            margin: 0 0 0.15rem 0 !important;
             color: {c['text']} !important;
           }}
           .azriel-sub {{
-            font-size: 0.92rem !important;
+            font-size: 0.85rem !important;
             color: {c['muted']} !important;
-            margin: 0 0 1.6rem 0 !important;
+            margin: 0 0 1.1rem 0 !important;
           }}
           .azriel-rule {{
             border: 0;
             border-top: 1px solid {c['rule']};
-            margin: 0 0 2.2rem 0;
-            max-width: 44rem;
+            margin: 0 0 2rem 0;
           }}
 
           body, p, li, span, label, h1, h2, h3, h4,
@@ -137,12 +130,10 @@ def apply_theme(mode: str) -> None:
           [data-testid="stChatMessage"] {{
             background: transparent;
             padding: 0.3rem 0 1rem 0;
-            max-width: 44rem;
           }}
           [data-testid="stChatInput"] {{
             background: {c['bg']};
             border: 1px solid {c['rule']};
-            max-width: 44rem;
           }}
           [data-testid="stChatInput"] textarea {{ color: {c['text']} !important; }}
 
@@ -150,7 +141,6 @@ def apply_theme(mode: str) -> None:
             border: 1px solid {c['rule']};
             border-radius: 6px;
             background: transparent;
-            max-width: 44rem;
           }}
           [data-testid="stExpander"] summary {{ color: {c['muted']}; }}
 
@@ -183,10 +173,66 @@ def apply_theme(mode: str) -> None:
           [data-testid="stWidgetLabel"] p {{ color: {c['muted']} !important; }}
           [data-baseweb="popover"] li {{ color: {c['text']}; }}
 
+          .azriel-cite {{
+            font-size: 0.68em;
+            font-weight: 600;
+            color: {c['muted']};
+            padding: 0 0.12em;
+            vertical-align: super;
+          }}
+          .azriel-hint {{
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: {c['muted']};
+            margin: 1.5rem 0 0.6rem 0;
+          }}
+
+          /* Set the prose for reading rather than for filling the window. */
+          [data-testid="stChatMessageContent"] p,
+          [data-testid="stChatMessageContent"] li {{
+            line-height: 1.62;
+            font-size: 0.97rem;
+          }}
+          [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
+            font-weight: 500;
+          }}
+
           hr {{ border-color: {c['rule']}; }}
         </style>
         """,
         unsafe_allow_html=True,
+    )
+
+
+# What the status line settles on once the route is known. The point of
+# saying it afterwards is that the user learns the routing exists.
+SUMMARIES = {
+    "retrieval": "Answered from your documents",
+    "direct": "Answered directly",
+    "calculate": "Worked out locally",
+    "clarify": "Needs rephrasing",
+}
+
+CITATION_RE = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def decorate_citations(text: str) -> str:
+    """Turn [1] and [2, 4] into something that reads as a reference mark.
+
+    Plain brackets in running prose look like a typo or an unrendered link.
+    Setting them small and raised marks them as apparatus rather than
+    sentence, which is what they are.
+    """
+    if not text:
+        return text
+    # One mark per group, with separators inside it. Rendering [1, 2, 3] as
+    # three adjacent superscripts produces "123", which reads as a number.
+    return CITATION_RE.sub(
+        lambda m: '<sup class="azriel-cite">'
+        + ",".join(n.strip() for n in m.group(1).split(","))
+        + "</sup>",
+        text,
     )
 
 
@@ -257,7 +303,7 @@ if "api_keys" not in st.session_state:
 if "show_debug" not in st.session_state:
     st.session_state.show_debug = False
 if "theme" not in st.session_state:
-    st.session_state.theme = "light"
+    st.session_state.theme = "dark"
 
 apply_theme(st.session_state.theme)
 
@@ -419,34 +465,77 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-for entry in st.session_state.history:
+
+def render_turn(entry: dict) -> None:
     with st.chat_message("user"):
         st.write(entry["question"])
     with st.chat_message("assistant"):
-        st.write(entry["answer"])
+        st.markdown(decorate_citations(entry["answer"]), unsafe_allow_html=True)
         render_sources(entry["sources"])
         if entry.get("trace"):
             render_trace(entry["trace"])
+
+
+for entry in st.session_state.history:
+    render_turn(entry)
+
+# --- Empty state -----------------------------------------------------------
+# A blank column and a text box tell a first-time visitor nothing, least of
+# all that this answers questions having nothing to do with their files. One
+# example per route says it faster than a paragraph would.
+has_docs = bool(store and len(store) > 0)
+asked = st.session_state.pop("pending_question", None)
+
+if not st.session_state.history and not asked and provider_ready:
+    st.markdown('<p class="azriel-hint">Try</p>', unsafe_allow_html=True)
+    examples = [
+        (f"What does {store.sources[0]} say about my experience?", "from your documents")
+        if has_docs else
+        ("Upload a file to ask about your own documents", None),
+        ("Explain what a vector embedding is", "general knowledge"),
+        ("What is 15% of 240?", "worked out locally, no API call"),
+    ]
+    for label, note in examples:
+        if note is None:
+            st.caption(label)
+            continue
+        if st.button(label, key=f"eg-{label[:20]}"):
+            st.session_state.pending_question = label
+            st.rerun()
+        st.caption(note)
 
 placeholder = (
     "Ask a question"
     if provider_ready
     else f"Configure {provider.name} in the sidebar"
 )
-question = st.chat_input(placeholder, disabled=not provider_ready)
+typed = st.chat_input(placeholder, disabled=not provider_ready)
+question = typed or asked
 
 if question:
     with st.chat_message("user"):
         st.write(question)
 
     with st.chat_message("assistant"):
-        with st.spinner("Thinking"):
+        # st.status carries the stage names out of the orchestrator, so the
+        # several seconds spent deciding how to answer look like progress
+        # rather than a frozen page.
+        status = st.status("Reading your question", expanded=False)
+        try:
             plan = process(
                 question,
                 store=store,
                 history=st.session_state.history,
                 provider=provider,
+                on_stage=lambda label: status.update(label=label),
             )
+        except Exception as exc:
+            status.update(label="Could not work out how to answer", state="error")
+            st.error(str(exc))
+            st.stop()
+
+        route = plan.trace.route.name
+        status.update(label=SUMMARIES.get(route, route), state="complete")
 
         answer = None
         if plan.answer is not None:
@@ -456,12 +545,21 @@ if question:
         elif plan.message is not None:
             st.info(plan.message)
         else:
+            slot = st.empty()
+            answer = ""
             try:
-                answer = st.write_stream(plan.stream())
+                for piece in plan.stream():
+                    answer += piece
+                    slot.markdown(answer)
+                # Re-render once complete so the citation markers can be
+                # styled; doing it per chunk would fight the stream.
+                slot.markdown(decorate_citations(answer), unsafe_allow_html=True)
             except (ProviderNotReady, ProviderError) as exc:
-                st.error(str(exc))
+                slot.error(str(exc))
+                answer = None
             except Exception as exc:
-                st.error(f"The request failed: {exc}")
+                slot.error(f"The request failed: {exc}")
+                answer = None
 
         sources = [(chunk.label, score, chunk.text) for chunk, score in plan.sources]
         render_sources(sources)
