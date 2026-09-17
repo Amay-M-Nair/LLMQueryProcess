@@ -33,6 +33,14 @@ class Provider(ABC):
     def check_ready(self) -> None:
         """Raise ProviderNotReady if this provider cannot run right now."""
 
+    def complete(self, system: str, prompt: str) -> str:
+        """The whole answer as one string, for callers that cannot stream.
+
+        Classification and rewriting need the complete reply before they can
+        act on it, so streaming buys them nothing.
+        """
+        return "".join(self.stream(system, prompt))
+
     def is_ready(self) -> bool:
         try:
             self.check_ready()
