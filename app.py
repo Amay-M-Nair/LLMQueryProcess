@@ -53,6 +53,13 @@ PALETTES = {
 }
 
 
+# One number for the size of the whole interface. Everything below is in rem,
+# so raising the root font size scales the type, the spacing and the width of
+# the reading column together. Better than zoom, which blurs on some displays
+# and leaves fixed-position elements behind.
+UI_SCALE = 1.25
+
+
 def apply_theme(mode: str) -> None:
     """Paint the interface. Presentation only - nothing here reads state."""
     c = PALETTES[mode]
@@ -60,6 +67,8 @@ def apply_theme(mode: str) -> None:
         f"""
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap');
+
+          html {{ font-size: {UI_SCALE * 100:.0f}%; }}
 
           /* Hide the chrome itself, never the toolbar that contains it.
              Streamlit renders the button that reopens a collapsed sidebar
@@ -81,9 +90,14 @@ def apply_theme(mode: str) -> None:
           [data-testid="stSidebar"] {{
             background: {c['panel']};
             border-right: 1px solid {c['rule']};
+            /* Streamlit fixes the sidebar width with an inline style, which
+               no stylesheet rule can beat, and !important would win by
+               breaking the drag-to-resize handle. Raising the floor scales
+               the panel with the text and still lets it be dragged wider. */
+            width: {300 * UI_SCALE:.0f}px !important;
           }}
 
-          .block-container {{ padding-top: 3.5rem; max-width: 46rem; }}
+          .block-container {{ padding-top: 3.5rem; max-width: 44rem; }}
 
           /* Streamlit styles headings specifically enough to win a plain
              class selector, so these are forced. Georgia is the fallback
