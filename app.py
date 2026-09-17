@@ -1,18 +1,17 @@
-"""The web page. Run it with:  streamlit run app.py"""
+"""The web page. Run it with:  streamlit run app.py
+
+Every Streamlit call in the project is in this file, and no decision is. What
+happens to a question is decided in backend/query_processor.py; this renders
+the result.
+"""
 
 import os
 
 import streamlit as st
 
-from backend import rag
-from backend.llm import (
-    PROVIDERS,
-    ProviderError,
-    ProviderNotReady,
-    get_provider,
-    model_for,
-)
-from ingestion.pipeline import build_index, retrieve
+from backend.llm import PROVIDERS, ProviderError, ProviderNotReady, get_provider, model_for
+from backend.query_processor import QueryTrace, process
+from ingestion.pipeline import build_index
 from utils import config
 from vectorstore.faiss_store import INDEX_FILE, VectorStore
 from vectorstore.metadata_store import METADATA_FILE
@@ -21,11 +20,49 @@ st.set_page_config(page_title="Document Q&A", layout="wide")
 
 
 def render_sources(sources: list[tuple[str, float, str]]) -> None:
-    """Show the excerpts the answer was built from, numbered to match its citations."""
+    """The excerpts an answer was built from, numbered to match its citations."""
+    if not sources:
+        return
     with st.expander(f"Sources ({len(sources)})"):
         for number, (label, score, text) in enumerate(sources, start=1):
             st.markdown(f"**[{number}] {label}** - similarity {score:.3f}")
             st.caption(text)
+
+
+def render_trace(trace: QueryTrace) -> None:
+    """How the question was handled. Off by default, invaluable when wrong."""
+    if not st.session_state.show_debug:
+        return
+
+    with st.expander("How this was answered"):
+        intent, route = trace.intent, trace.route
+        left, right = st.columns(2)
+        with left:
+            st.markdown(f"**Intent** `{intent.name}`")
+            st.caption(f"decided by {intent.method} - {intent.reason}")
+        with right:
+            st.markdown(f"**Route** `{route.name}`")
+            st.caption(route.reason)
+
+        if trace.rewrite and trace.rewrite.changed:
+            st.markdown("**Searched for instead**")
+            st.caption(f"{trace.rewrite.original!r} -> {trace.rewrite.query!r}")
+
+        for note in trace.notes:
+            st.warning(note, icon=":material/info:")
+
+        stages = " · ".join(f"{k} {v*1000:.0f}ms" for k, v in trace.timings.items())
+        st.caption(
+            f"{trace.api_calls} API call{'' if trace.api_calls == 1 else 's'} · "
+            f"{stages or 'no timed stages'} · {trace.total_seconds:.2f}s total"
+        )
+
+
+def clear_index() -> None:
+    for filename in (INDEX_FILE, METADATA_FILE):
+        (config.INDEX_DIR / filename).unlink(missing_ok=True)
+    st.session_state.store = None
+    st.session_state.load_error = None
 
 
 # --- State -----------------------------------------------------------------
@@ -46,6 +83,8 @@ if "api_keys" not in st.session_state:
     # side and per browser session, so one visitor's key is never handed to
     # another - but it is also never persisted, by design.
     st.session_state.api_keys = {}
+if "show_debug" not in st.session_state:
+    st.session_state.show_debug = False
 
 store: VectorStore | None = st.session_state.store
 
@@ -103,22 +142,20 @@ with st.sidebar:
             st.caption(f"- {name} ({count} chunk{'' if count == 1 else 's'})")
 
         if st.button("Clear index"):
-            for filename in (INDEX_FILE, METADATA_FILE):
-                (config.INDEX_DIR / filename).unlink(missing_ok=True)
-            st.session_state.store = None
+            clear_index()
             st.session_state.history = []
-            st.session_state.load_error = None
             st.rerun()
     elif st.session_state.get("load_error"):
         # The index exists but could not be opened, so the usual Clear button
         # above is out of reach - offer it here or there is no way out.
         if st.button("Delete the unreadable index"):
-            for filename in (INDEX_FILE, METADATA_FILE):
-                (config.INDEX_DIR / filename).unlink(missing_ok=True)
-            st.session_state.load_error = None
+            clear_index()
             st.rerun()
     else:
-        st.info("No documents indexed yet. Upload a file above to start.")
+        st.info(
+            "No documents indexed yet. You can still ask general questions - "
+            "upload a file to ask about your own."
+        )
 
     st.divider()
     st.header("Answer model")
@@ -183,12 +220,23 @@ with st.sidebar:
         st.warning(str(exc))
         provider_ready = False
 
+    st.divider()
+    st.session_state.show_debug = st.toggle(
+        "Show how each answer was reached",
+        value=st.session_state.show_debug,
+        help="Intent, route, the query actually searched for, timings and API calls.",
+    )
+
+    if st.session_state.history and st.button("Clear conversation"):
+        st.session_state.history = []
+        st.rerun()
+
 
 # --- Main ------------------------------------------------------------------
 st.title("Ask your documents")
 st.caption(
-    "Answers come only from the files you uploaded. Every claim is cited back "
-    "to the page it came from."
+    "Questions about your uploaded files are answered from them, with every claim "
+    "cited back to its page. Anything else is answered directly."
 )
 
 for entry in st.session_state.history:
@@ -197,46 +245,54 @@ for entry in st.session_state.history:
     with st.chat_message("assistant"):
         st.write(entry["answer"])
         render_sources(entry["sources"])
+        if entry.get("trace"):
+            render_trace(entry["trace"])
 
-has_docs = bool(store and len(store) > 0)
-
-if not has_docs:
-    placeholder = "Upload a document first"
-elif not provider_ready:
-    placeholder = f"Set up {provider.name} first - see the sidebar"
-else:
-    placeholder = "Ask a question about your documents"
-
-question = st.chat_input(placeholder, disabled=not (has_docs and provider_ready))
+placeholder = (
+    "Ask anything - about your documents, or not"
+    if provider_ready
+    else f"Set up {provider.name} first - see the sidebar"
+)
+question = st.chat_input(placeholder, disabled=not provider_ready)
 
 if question:
     with st.chat_message("user"):
         st.write(question)
 
     with st.chat_message("assistant"):
-        with st.spinner("Searching your documents..."):
-            retrieved = retrieve(store, question, k=config.TOP_K)
-
-        if not retrieved:
-            st.warning(
-                "Nothing in your documents was close enough to that question. "
-                "Try rephrasing, or lower MIN_SIMILARITY in utils/config.py."
+        with st.spinner("Working out how to answer..."):
+            plan = process(
+                question,
+                store=store,
+                history=st.session_state.history,
+                provider=provider,
             )
+
+        answer = None
+        if plan.answer is not None:
+            # Known without a model - arithmetic.
+            st.markdown(plan.answer)
+            answer = plan.answer
+        elif plan.message is not None:
+            st.info(plan.message)
         else:
-            answer = None
             try:
-                answer = st.write_stream(
-                    rag.stream_answer(question, retrieved, provider=provider)
-                )
+                answer = st.write_stream(plan.stream())
             except (ProviderNotReady, ProviderError) as exc:
                 st.error(str(exc))
             except Exception as exc:
                 st.error(f"The request failed: {exc}")
 
-            sources = [(chunk.label, score, chunk.text) for chunk, score in retrieved]
-            render_sources(sources)
+        sources = [(chunk.label, score, chunk.text) for chunk, score in plan.sources]
+        render_sources(sources)
+        render_trace(plan.trace)
 
-            if answer:
-                st.session_state.history.append(
-                    {"question": question, "answer": answer, "sources": sources}
-                )
+        if answer:
+            st.session_state.history.append(
+                {
+                    "question": question,
+                    "answer": answer,
+                    "sources": sources,
+                    "trace": plan.trace,
+                }
+            )

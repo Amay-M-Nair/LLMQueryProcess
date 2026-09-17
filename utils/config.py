@@ -90,13 +90,13 @@ ANTHROPIC_EFFORT = "medium"      # low | medium | high | xhigh | max
 ANTHROPIC_MAX_TOKENS = 16000     # thinking tokens count toward this
 USE_REFUSAL_FALLBACKS = True     # retry on another model if a request is declined
 
-# --- The prompt ------------------------------------------------------------
-SYSTEM_PROMPT = """You answer questions using ONLY the numbered source excerpts provided.
+# --- Query processing ------------------------------------------------------
+# How many past exchanges the rewriter and the direct-answer path can see.
+# Enough to resolve "it" without burying the current question.
+HISTORY_TURNS = 4
 
-Rules:
-- Every factual claim must be followed by a citation like [1] or [2, 4] naming the
-  excerpt(s) it came from.
-- If the excerpts do not contain the answer, say so plainly. Do not use outside
-  knowledge to fill the gap, and do not guess.
-- If the excerpts conflict, say that and cite both sides.
-- Be concise and direct. No preamble."""
+# A follow-up this short is usually a fragment leaning on the previous turn,
+# so it is worth resolving before searching.
+SHORT_FOLLOWUP_WORDS = 4
+
+# The prompts themselves live in utils/prompts.py.

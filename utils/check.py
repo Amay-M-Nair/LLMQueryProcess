@@ -83,7 +83,7 @@ def live_check(name: str) -> bool:
     try:
         started = time.monotonic()
         answer = provider.complete(
-            config.SYSTEM_PROMPT,
+            prompts.RAG_SYSTEM,
             f"Here are the source excerpts:\n\n{excerpt}\n\n"
             "---\n\nQuestion: How long do I have to request a refund?",
         )

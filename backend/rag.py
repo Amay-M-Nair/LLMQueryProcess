@@ -1,16 +1,26 @@
-"""Build the prompt and hand it to whichever provider is configured."""
+"""Generating an answer - with retrieved excerpts, or without.
+
+Two prompts, two contracts. A retrieval answer is bound to the excerpts and
+must cite them; a direct answer has nothing to cite and must not pretend
+otherwise. Keeping them apart is what stops a general question picking up
+citation machinery that has nothing behind it.
+
+Nothing here decides *which* path a question takes - that is the router's
+job - and nothing here touches Streamlit.
+"""
 
 from typing import Iterator
 
 from backend.llm import Provider, ProviderError, ProviderNotReady, get_provider
 from ingestion.chunker import Chunk
-from utils import config
+from utils import config, prompts
 
 __all__ = [
     "ProviderError",
     "ProviderNotReady",
     "build_prompt",
     "stream_answer",
+    "stream_direct_answer",
 ]
 
 
@@ -32,7 +42,23 @@ def stream_answer(
     retrieved: list[tuple[Chunk, float]],
     provider: Provider | None = None,
 ) -> Iterator[str]:
-    """Yield the answer text as it arrives, so the page can render it live."""
+    """Answer from the excerpts, with citations. Yields text as it arrives."""
     provider = provider or get_provider()
-    prompt = build_prompt(question, retrieved)
-    yield from provider.stream(config.SYSTEM_PROMPT, prompt)
+    yield from provider.stream(prompts.RAG_SYSTEM, build_prompt(question, retrieved))
+
+
+def stream_direct_answer(
+    question: str,
+    history: list[dict] | None = None,
+    provider: Provider | None = None,
+) -> Iterator[str]:
+    """Answer from the model's own knowledge, with no excerpts and no citations.
+
+    History goes in so a conversation stays coherent across turns - without
+    it, "and why is that?" has nothing to attach to.
+    """
+    provider = provider or get_provider()
+    system, user = prompts.direct_prompt(
+        question, history or [], config.HISTORY_TURNS
+    )
+    yield from provider.stream(system, user)
