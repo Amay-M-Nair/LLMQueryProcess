@@ -18,7 +18,7 @@ import streamlit as st
 from backend.llm import PROVIDERS, ProviderError, ProviderNotReady, get_provider, model_for
 from backend.query_processor import QueryTrace, process
 from ingestion.pipeline import build_index
-from utils import config
+from utils import config, env_file
 from vectorstore.faiss_store import INDEX_FILE, VectorStore
 from vectorstore.metadata_store import METADATA_FILE
 
@@ -436,42 +436,79 @@ with st.sidebar:
     provider_name = st.session_state.provider_name
     keys = st.session_state.api_keys
 
-    # The key box exists so a deployed copy can ask each visitor for their own
-    # key rather than shipping one. Typed keys live in this browser session
-    # only: never written to disk, never logged, gone when the tab closes.
+    # Three places a key can come from, and the sidebar says which is in use:
+    # typed here (this session only), saved in .env (every session), or
+    # nothing. A deployed copy relies on the first; your own machine is
+    # better served by the second.
     if get_provider(provider_name).needs_key:
         variable = get_provider(provider_name).key_variable
         from_env = bool(os.environ.get(variable))
+        typed = keys.get(provider_name, "")
 
-        typed = st.text_input(
+        if st.session_state.pop("key_saved", None):
+            st.success(f"`{variable}` saved to .env.")
+
+        # The widget keeps whatever was typed across reruns, so emptying the
+        # session dict is not enough to clear the box - saving would leave the
+        # key sitting there and the sidebar still claiming it was typed rather
+        # than stored. Bumping the key builds a fresh, empty widget instead.
+        nonce = st.session_state.get("key_input_nonce", 0)
+        entered = st.text_input(
             "API key",
-            value=keys.get(provider_name, ""),
+            value=typed,
             type="password",
-            placeholder="Using the key from .env" if from_env else f"Paste your {variable}",
+            key=f"api_key_{provider_name}_{nonce}",
+            placeholder="Paste a key to use it here" if from_env else f"Paste your {variable}",
             help=(
-                "Overrides .env for this session only. Nothing is saved to "
-                "disk, so closing the tab forgets it."
+                f"Used instead of {variable} for this session. Save it to keep "
+                "it across restarts."
             ),
         )
-        keys[provider_name] = typed
+        if entered != typed:
+            keys[provider_name] = entered
+            typed = entered
 
         if typed:
-            st.caption("Using the key you entered (this session only).")
+            st.caption("Using the key you entered.")
         elif from_env:
             st.caption(f"Using `{variable}` from your .env file.")
+        else:
+            st.caption(f"No key yet. Paste one above, or set `{variable}` in .env.")
 
         # "Ready" below only means a key is present. A key can be present and
         # be a typo, expired, or out of quota - all of which look identical
         # until the first question fails. This spends one request to find out,
         # on a button so it is never spent behind your back.
-        if st.button("Verify key", help="Spends one API call."):
+        if st.button("Verify key", help="Spends one API call.", disabled=not (typed or from_env)):
             candidate = get_provider(provider_name, api_key=typed or None)
             with st.spinner("Verifying"):
                 try:
-                    reply = candidate.complete("Reply with the single word OK.", "Ready?")
+                    candidate.complete("Reply with the single word OK.", "Ready?")
                     st.success("Key accepted.")
                 except Exception as exc:
                     st.error(f"Rejected: {exc}")
+
+        if typed:
+            if st.button("Save to .env", help="Keeps this key across restarts."):
+                try:
+                    env_file.set_value(variable, typed)
+                except env_file.EnvWriteError as exc:
+                    st.error(str(exc))
+                else:
+                    keys.pop(provider_name, None)   # it lives in .env now
+                    st.session_state.key_input_nonce = nonce + 1
+                    st.session_state.key_saved = True
+                    st.rerun()
+
+            if st.button("Discard", help="Forget the key you typed."):
+                keys.pop(provider_name, None)
+                st.session_state.key_input_nonce = nonce + 1
+                st.rerun()
+
+        elif from_env:
+            if st.button("Remove from .env", help=f"Deletes {variable} from the file."):
+                env_file.clear_value(variable)
+                st.rerun()
 
     provider = get_provider(provider_name, api_key=keys.get(provider_name) or None)
     st.caption(f"Model: `{model_for(provider.name)}`")
