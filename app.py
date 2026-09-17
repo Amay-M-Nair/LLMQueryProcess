@@ -114,6 +114,30 @@ def apply_theme(mode: str) -> None:
           .stMarkdown, [data-testid="stChatMessageContent"] {{ color: {c['text']}; }}
           [data-testid="stCaptionContainer"], .stCaption, small {{ color: {c['muted']} !important; }}
 
+          /* Streamlit reserves the sidebar header for a logo and leaves 60px
+             of nothing when there isn't one. The wordmark goes there, which
+             balances the collapse arrow sitting opposite it. */
+          [data-testid="stSidebarHeader"] {{
+            /* Left padding is zero because the spacer already carries a 20px
+               inset, which is exactly where the headings below start. */
+            padding: 0 1rem 0 0 !important;
+            align-items: center;
+          }}
+          [data-testid="stLogoSpacer"] {{
+            width: auto !important;
+            height: auto !important;
+            display: flex;
+            align-items: center;
+          }}
+          [data-testid="stLogoSpacer"]::before {{
+            content: "Azriel";
+            font-family: 'Fraunces', Georgia, serif;
+            font-size: 1.05rem;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            color: {c['muted']};
+          }}
+
           [data-testid="stSidebar"] h2 {{
             font-size: 0.68rem;
             font-weight: 600;
