@@ -1,0 +1,36 @@
+Northwind Logistics - Customer Refund Policy
+
+Overview
+This policy governs refunds for goods and services purchased directly from
+Northwind Logistics. It does not apply to purchases made through third-party
+resellers, which are governed by the reseller's own terms.
+
+Standard refund window
+Customers may request a full refund within 30 days of purchase, provided the
+item is returned in its original packaging and in resalable condition. The
+window is extended to 60 days for purchases made in December.
+
+Digital goods
+Digital goods are non-refundable once downloaded, except where the file is
+demonstrably corrupt or does not match its description. A download is
+considered to have occurred when the file transfer completes.
+
+Shipping charges
+Shipping charges are not refunded unless the return results from an error on
+our part, such as a mis-picked or damaged item. Return postage is paid by the
+customer except in those circumstances.
+
+Processing
+Refunds are issued to the original payment method and typically appear within
+five business days of approval. Refunds to expired cards are issued as
+account credit instead. Approval normally takes two business days from receipt
+of the returned item.
+
+Exceptions
+Bespoke or personalised items cannot be refunded unless faulty. Bulk orders
+above 5,000 pounds are subject to a 15 percent restocking fee.
+
+Contact
+For questions about a refund, contact returns@northwind-example.com or call
+0800 555 0199 between 09:00 and 17:00 on weekdays. The returns coordinator is
+Priya Raghunathan, reference desk QX-4471.

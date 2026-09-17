@@ -206,9 +206,6 @@ so it means one new module in `vectorstore/` and no changes anywhere else.
 
 ## Known limits
 
-- **General-knowledge questions do not work yet.** The chat box stays disabled
-  until a document is indexed, and the prompt forbids answering from anything
-  but the excerpts. Query routing is what fixes this.
 - **Scanned PDFs do not work.** If a PDF is page images rather than text, there
   is nothing to extract; the app detects this and tells you. Fixing it needs an
   OCR step.
@@ -220,15 +217,38 @@ so it means one new module in `vectorstore/` and no changes anywhere else.
   nor keyword search can find the right chunk. Storing per-document summaries
   and searching those too would fix it.
 
-## Where this is going
+## What happens to a question
 
-The layered structure above is groundwork for a query-processing layer that
-does not exist yet. Planned, in order:
+Not every question needs the same treatment, and the expensive paths are the
+ones worth avoiding. A question is classified first, then routed:
 
-1. **Intent classification and routing** — send general questions straight to
-   the model and document questions through retrieval, so both work.
-2. **Query rewriting** — resolve follow-ups like "what about its limitations?"
-   against the conversation so far.
-3. **Evaluation** — a small labelled dataset measuring intent accuracy,
-   retrieval relevance, answer faithfulness and latency, to show the query
-   layer earns its keep.
+| Intent | Route | Costs |
+|---|---|---|
+| `calculation` | worked out locally with an AST walk | **nothing** |
+| `general` | straight to the model, no retrieval | one call |
+| `document_query` | retrieval, answer cited back to the page | one or two calls |
+| `summarization` | retrieval over the named document | one or two calls |
+| `unknown` | asks you to rephrase | nothing |
+
+Classification tries rules before it tries the model. Arithmetic, summary
+requests, empty input and "nothing is indexed" are all settled locally, so the
+common question costs one API call rather than three — which on a tier
+allowing twenty requests a day is the difference between working all day and
+being locked out by lunchtime.
+
+Follow-ups are rewritten before retrieval, but only when they look dependent
+on the conversation — a dangling pronoun, a continuation opener, a very short
+question. "What about its limitations?" is searched for as "What are the
+limitations of Transformers?", while the answer is still generated from what
+you actually typed.
+
+Turn on **Show how each answer was reached** in the sidebar to see the intent,
+the route, the query that was actually searched for, the timings and the
+number of API calls spent.
+
+### Where an answer is allowed to come from
+
+Document questions are answered from the excerpts and cite them. Where the
+excerpts do not cover the question, the answer says so and may then continue
+under a **Beyond your documents** heading, which carries no citations. A
+marked answer is more use than a dead end, and the boundary stays visible.

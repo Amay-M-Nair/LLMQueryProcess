@@ -22,13 +22,27 @@ _model = None
 
 
 def get_model(name: str = config.EMBED_MODEL) -> "SentenceTransformer":
-    """Load the embedding model once and reuse it (it is slow to construct)."""
-    global _model
-    if _model is None:
-        import torch
-        from sentence_transformers import SentenceTransformer
+    """Load the embedding model once and reuse it (it is slow to construct).
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+    Once the weights are cached, loading is a local operation - except that
+    sentence-transformers still contacts the HuggingFace hub to check for a
+    newer revision. When the hub is slow or unreachable that check can hang
+    for minutes with nothing to show for it, which looks exactly like the
+    application having frozen. So the cache is tried offline first, and the
+    network is only involved when there is genuinely nothing to load.
+    """
+    global _model
+    if _model is not None:
+        return _model
+
+    import torch
+    from sentence_transformers import SentenceTransformer
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    try:
+        _model = SentenceTransformer(name, device=device, local_files_only=True)
+    except Exception:
+        # Not cached yet - this is the download, and it is meant to take a while.
         _model = SentenceTransformer(name, device=device)
     return _model
 

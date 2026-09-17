@@ -1,0 +1,30 @@
+Northwind Logistics - Information Security Standard
+
+Passwords and authentication
+Passwords must be at least 14 characters and are not required to be rotated
+on a schedule, in line with current guidance. Multi-factor authentication is
+mandatory for all remote access and for any account with administrative
+privileges. Hardware security keys are issued to staff in engineering and
+finance.
+
+Device management
+Company laptops are encrypted at rest using full-disk encryption. A device
+must be reported lost or stolen within 24 hours. Personal devices may access
+company email only through the managed application, never through a native
+mail client.
+
+Data classification
+Data is classified as Public, Internal, Confidential or Restricted.
+Confidential data may not be copied to removable media. Restricted data may
+only be processed on company-managed devices within the corporate network or
+over the approved VPN.
+
+Incident reporting
+Suspected security incidents must be reported to security@northwind-example.com
+within one hour of discovery. The on-call security engineer responds within
+30 minutes during business hours and within two hours outside them. Staff are
+never penalised for reporting an incident that turns out to be benign.
+
+Third parties
+Vendors handling Confidential or Restricted data must complete a security
+assessment before contract signature, and be reassessed annually.
