@@ -4,9 +4,10 @@ Every Streamlit call in the project is in this file, and no decision is. What
 happens to a question is decided in backend/query_processor.py; this renders
 the result.
 
-The styling below is deliberately thin: a serif wordmark, one accent colour,
-and hairline rules. Colours live in .streamlit/config.toml so they can be
-changed without reading any of this.
+The styling below is deliberately thin: a serif wordmark, hairline rules, and
+six colour tokens per theme in PALETTES. Streamlit cannot change theme while
+running, so dark mode is those tokens rendered as CSS over the base theme in
+.streamlit/config.toml.
 """
 
 import os
@@ -24,65 +25,169 @@ APP_NAME = "Azriel"
 
 st.set_page_config(
     page_title=APP_NAME,
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Restraint, mostly by removal: the toolbar, the footer, and the default
-# heading weights. A reading surface should look like one.
-st.markdown(
-    """
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&display=swap');
+# Streamlit cannot change theme at runtime, so the palette is applied as CSS
+# over the top of the one in .streamlit/config.toml. Everything below reads
+# from these six tokens - to retheme the app, change them and nothing else.
+PALETTES = {
+    "light": {
+        "bg": "#fbfbfa",
+        "panel": "#f4f4f1",
+        "text": "#1c2427",
+        "muted": "#6b7478",
+        "rule": "#e3e3df",
+        "accent": "#2f3e46",
+    },
+    "dark": {
+        "bg": "#14181a",
+        "panel": "#1b2023",
+        "text": "#e8e6e1",
+        "muted": "#8d9599",
+        "rule": "#2a3134",
+        "accent": "#cfd8d5",
+    },
+}
 
-      [data-testid="stToolbar"], footer, #MainMenu { display: none; }
-      [data-testid="stDecoration"] { display: none; }
 
-      .block-container { padding-top: 3.5rem; max-width: 46rem; }
+def apply_theme(mode: str) -> None:
+    """Paint the interface. Presentation only - nothing here reads state."""
+    c = PALETTES[mode]
+    st.markdown(
+        f"""
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap');
 
-      .azriel-mark {
-        font-family: 'Fraunces', Georgia, serif;
-        font-size: 2.1rem;
-        font-weight: 500;
-        letter-spacing: 0.01em;
-        margin: 0 0 0.15rem 0;
-        color: #1c2427;
-      }
-      .azriel-sub {
-        font-size: 0.85rem;
-        color: #6b7478;
-        margin: 0 0 1.1rem 0;
-        font-weight: 400;
-      }
-      .azriel-rule {
-        border: 0;
-        border-top: 1px solid #e3e3df;
-        margin: 0 0 2rem 0;
-      }
+          [data-testid="stToolbar"], footer, #MainMenu,
+          [data-testid="stDecoration"] {{ display: none; }}
 
-      /* Sidebar: quiet section labels rather than headings that shout. */
-      [data-testid="stSidebar"] h2 {
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.09em;
-        text-transform: uppercase;
-        color: #6b7478;
-        margin-bottom: 0.4rem;
-      }
-      [data-testid="stSidebar"] .stButton button { width: 100%; }
+          /* Set the inherited colour too, so anything not styled below still
+             lands the right way up in dark mode. */
+          [data-testid="stAppViewContainer"],
+          [data-testid="stHeader"] {{ background: {c['bg']}; color: {c['text']}; }}
+          [data-testid="stSidebar"] {{
+            background: {c['panel']};
+            border-right: 1px solid {c['rule']};
+          }}
 
-      /* Chat: no bubbles, just indentation and a rule between turns. */
-      [data-testid="stChatMessage"] {
-        background: transparent;
-        padding: 0.35rem 0 0.9rem 0;
-      }
+          /* Left-aligned reading column rather than a centred one: the
+             wordmark and the text share a single left edge. */
+          .block-container {{
+            padding: 2.2rem 2rem 6rem 3.2rem;
+            max-width: 62rem;
+            margin-left: 0;
+          }}
+          .azriel-body {{ max-width: 44rem; }}
 
-      .stExpander { border: 1px solid #e3e3df; border-radius: 6px; }
-      code { font-size: 0.85em; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+          /* Streamlit styles headings specifically enough to win a plain
+             class selector, so these are forced. Georgia is the fallback
+             rather than a hope: Fraunces comes from Google Fonts and may not
+             load at all behind a proxy or offline. */
+          h1.azriel-mark, .stMarkdown h1.azriel-mark {{
+            font-family: 'Fraunces', Georgia, 'Times New Roman', serif !important;
+            font-size: 4.4rem !important;
+            font-weight: 600 !important;
+            line-height: 0.98 !important;
+            letter-spacing: -0.02em !important;
+            padding: 0 !important;
+            margin: 0 0 0.45rem -0.045em !important;
+            color: {c['text']} !important;
+          }}
+          .azriel-sub {{
+            font-size: 0.92rem !important;
+            color: {c['muted']} !important;
+            margin: 0 0 1.6rem 0 !important;
+          }}
+          .azriel-rule {{
+            border: 0;
+            border-top: 1px solid {c['rule']};
+            margin: 0 0 2.2rem 0;
+            max-width: 44rem;
+          }}
+
+          body, p, li, span, label, h1, h2, h3, h4,
+          .stMarkdown, [data-testid="stChatMessageContent"] {{ color: {c['text']}; }}
+          [data-testid="stCaptionContainer"], .stCaption, small {{ color: {c['muted']} !important; }}
+
+          [data-testid="stSidebar"] h2 {{
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: {c['muted']};
+            margin-bottom: 0.4rem;
+          }}
+          [data-testid="stSidebar"] .stButton button {{ width: 100%; }}
+
+          .stButton button, .stDownloadButton button {{
+            background: transparent;
+            color: {c['text']};
+            border: 1px solid {c['rule']};
+          }}
+          .stButton button:hover {{ border-color: {c['accent']}; color: {c['accent']}; }}
+
+          input, textarea, [data-baseweb="select"] > div, [data-baseweb="input"] {{
+            background: {c['bg']} !important;
+            color: {c['text']} !important;
+            border-color: {c['rule']} !important;
+          }}
+
+          [data-testid="stChatMessage"] {{
+            background: transparent;
+            padding: 0.3rem 0 1rem 0;
+            max-width: 44rem;
+          }}
+          [data-testid="stChatInput"] {{
+            background: {c['bg']};
+            border: 1px solid {c['rule']};
+            max-width: 44rem;
+          }}
+          [data-testid="stChatInput"] textarea {{ color: {c['text']} !important; }}
+
+          [data-testid="stExpander"] {{
+            border: 1px solid {c['rule']};
+            border-radius: 6px;
+            background: transparent;
+            max-width: 44rem;
+          }}
+          [data-testid="stExpander"] summary {{ color: {c['muted']}; }}
+
+          [data-testid="stFileUploaderDropzone"] {{
+            background: {c['bg']};
+            border: 1px dashed {c['rule']};
+          }}
+          /* Streamlit hard-codes several colours for the light theme. Each of
+             these leaked dark-on-dark or a light panel into the dark palette,
+             so they are forced rather than merely set. */
+          code, .stCode, [data-testid="stCode"], pre {{
+            font-size: 0.85em !important;
+            color: {c['accent']} !important;
+            background: transparent !important;
+          }}
+
+          .stButton button p, .stButton button span {{ color: inherit !important; }}
+          .stButton button:disabled,
+          .stButton button:disabled p {{ color: {c['muted']} !important; opacity: 0.55; }}
+
+          [data-testid="stFileUploaderDropzone"],
+          [data-testid="stFileUploaderDropzone"] span,
+          [data-testid="stFileUploaderDropzone"] small,
+          [data-testid="stFileUploaderDropzone"] div {{ color: {c['muted']} !important; }}
+          [data-testid="stFileUploaderDropzone"] button {{
+            color: {c['text']} !important;
+            border-color: {c['rule']} !important;
+          }}
+
+          [data-testid="stWidgetLabel"] p {{ color: {c['muted']} !important; }}
+          [data-baseweb="popover"] li {{ color: {c['text']}; }}
+
+          hr {{ border-color: {c['rule']}; }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_sources(sources: list[tuple[str, float, str]]) -> None:
@@ -151,6 +256,10 @@ if "api_keys" not in st.session_state:
     st.session_state.api_keys = {}
 if "show_debug" not in st.session_state:
     st.session_state.show_debug = False
+if "theme" not in st.session_state:
+    st.session_state.theme = "light"
+
+apply_theme(st.session_state.theme)
 
 store: VectorStore | None = st.session_state.store
 
@@ -282,6 +391,14 @@ with st.sidebar:
         provider_ready = False
 
     st.divider()
+    dark = st.toggle("Dark", value=st.session_state.theme == "dark")
+    chosen = "dark" if dark else "light"
+    if chosen != st.session_state.theme:
+        # Repaint on the next run; restyling the current one would leave the
+        # already-rendered sidebar in the old palette.
+        st.session_state.theme = chosen
+        st.rerun()
+
     st.session_state.show_debug = st.toggle(
         "Show reasoning",
         value=st.session_state.show_debug,
@@ -295,7 +412,7 @@ with st.sidebar:
 
 # --- Main ------------------------------------------------------------------
 st.markdown(
-    f'<p class="azriel-mark">{APP_NAME}</p>'
+    f'<h1 class="azriel-mark">{APP_NAME}</h1>'
     '<p class="azriel-sub">Answers from your documents, cited. '
     'Everything else, answered directly.</p>'
     '<hr class="azriel-rule">',
