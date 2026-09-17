@@ -72,6 +72,12 @@ related passage" — even when the question and the document share no words.
 
 The first run downloads the embedding model (~90 MB), once.
 
+Run the tests with:
+
+```bash
+.venv/Scripts/python.exe -m pytest
+```
+
 ## Project layout
 
 The code is split into four layers. Each depends only on the layers below it,
@@ -80,7 +86,10 @@ so any single piece can be replaced without disturbing the rest.
 | Layer | Module | Job |
 |---|---|---|
 | UI | `app.py` | The web page — all Streamlit code lives here and nowhere else |
-| **backend** | `rag.py` | Builds the prompt, hands it to the chosen provider |
+| **backend** | `intent_classifier.py` | What kind of question is this? |
+| | `router.py` | Which path should it take? |
+| | `calculator.py` | Arithmetic, worked out locally |
+| | `rag.py` | Builds the prompt, hands it to the chosen provider |
 | | `llm.py` | Provider registry — picks one by name |
 | | `providers/` | One adapter per answer model (Gemini, Ollama, Claude) |
 | **ingestion** | `document_loader.py` | File → pages of text |
@@ -91,6 +100,8 @@ so any single piece can be replaced without disturbing the rest.
 | | `metadata_store.py` | Chunk records and the register of indexed documents |
 | | `keyword.py` | BM25 keyword scoring, blended into the ranking |
 | **utils** | `config.py` | Every tunable number in one place |
+| | `preprocessing.py` | Tidies a question without changing what it asks |
+| | `prompts.py` | Every prompt the system sends |
 | | `check.py` | `python -m utils.check` — tells you what is set up |
 
 Because the UI is confined to `app.py`, you can drive the same pipeline from a
