@@ -289,7 +289,7 @@ so it means one new module in `vectorstore/` and no changes anywhere else.
 
 ## Deploying it
 
-Not yet done, and the reason is worth stating plainly rather than leaving as a
+Not done, and the reason is worth stating plainly rather than leaving as a
 surprise.
 
 ### The blocker
@@ -299,9 +299,9 @@ land in it, so one person's question retrieves and cites another person's
 documents. That is a privacy leak, not a rough edge, and it is the thing to
 fix before a link goes anywhere.
 
-Streamlit cannot really fix it: there is no user, only a session. Scoping
-documents to a person needs authentication, which is where a web framework
-earns its place.
+Streamlit cannot fix it: it has sessions but no users, and a document has to
+belong to someone. Scoping documents to a person needs authentication, which
+is where a web framework earns its place.
 
 ### What deployment changes about the design
 
@@ -335,7 +335,7 @@ Browser  ->  Django (auth, sessions, uploads, streaming views)
 
 **The layers already separate correctly.** `backend.query_processor.process()`
 does not know Streamlit exists - it takes a question and returns a plan - so a
-view calls it the same way `app.py` does:
+view would call it the same way `app.py` does:
 
 ```python
 def ask(request):
