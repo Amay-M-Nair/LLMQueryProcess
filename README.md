@@ -174,6 +174,21 @@ because the words "name" and "contact" appear nowhere in a resume.
 So when the index is under `FULL_CONTEXT_WORDS`, everything is sent and the
 model decides what is relevant. Retrieval only kicks in above that size.
 
+## Why FAISS and not pgvector
+
+| | FAISS | pgvector |
+|---|---|---|
+| Setup | a file under `data/index/` | a running PostgreSQL server |
+| Accuracy at this scale | `IndexFlatIP` is **exact**, sub-millisecond for thousands of chunks | HNSW/IVFFlat are **approximate** — trading exactness for speed this corpus does not need |
+| Hybrid keyword search | BM25 blended into the ranking, already built | Postgres full-text uses `ts_rank`, **not** BM25 — the blend would need rewriting |
+| Filtered search | needs an `IDSelector`, or over-fetch then filter | native: `WHERE user_id = $2 ORDER BY embedding <=> $1` |
+| Concurrent writers | single-writer index files | transactional |
+
+pgvector is the right answer for multiple users, deployed, with filtered
+search; the wrong one for a single person on a laptop with a few hundred
+chunks. Swapping later is a small job — everything goes through `VectorStore`,
+so it means one new module in `vectorstore/` and no changes anywhere else.
+
 ## Known limits
 
 - **General-knowledge questions do not work yet.** The chat box stays disabled
