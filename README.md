@@ -246,6 +246,37 @@ Turn on **Show how each answer was reached** in the sidebar to see the intent,
 the route, the query that was actually searched for, the timings and the
 number of API calls spent.
 
+### Does any of it help?
+
+`evaluation/` holds a corpus whose facts are known by construction, 35
+labelled questions across the five intents, and a scorer. Run it with:
+
+```bash
+.venv/Scripts/python.exe -m evaluation.run_eval --answers
+```
+
+Against Gemini, over 15 chunks:
+
+| | |
+|---|---|
+| Intent accuracy | 32/32 — 6/6 by rule, 26/26 by model |
+| Retrieval hit@2 | 25/25, MRR 1.000 |
+| Answer contains the expected fact | 32/32 |
+| Citations that resolve to a real excerpt | 35/35 |
+| Absent facts admitted as absent | 2/2 |
+| API calls | 1.71 per question; 4 of 35 answered for nothing |
+| Latency | median 6.4s, classification 2.6s of it |
+
+Two caveats, because a number is only worth the test behind it. **The corpus
+is 15 chunks.** Retrieval scores are reported alongside the share of the index
+returned per question, and the harness prints a warning when that share is
+large enough for hit@k to be unable to fail — at `--top-k 5` it does, at
+`--top-k 2` it does not, which is why the table quotes hit@2. Nothing here
+predicts behaviour over thousands of chunks. **And the dataset is small
+enough to overfit to**, so `evaluation/dataset.jsonl` keeps the cases that
+have failed, including one marked `KNOWN HARD` where the classifier does not
+reliably follow its own instruction.
+
 ### Where an answer is allowed to come from
 
 Document questions are answered from the excerpts and cite them. Where the

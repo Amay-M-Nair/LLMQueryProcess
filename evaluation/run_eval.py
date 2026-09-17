@@ -138,8 +138,12 @@ def score(result: Result, check_answers: bool) -> None:
         result.failures.append("no answer produced")
         return
 
+    # "2.0|double" means either will do: a fact can be stated correctly in
+    # more than one way, and demanding every phrasing marks right answers
+    # wrong.
     for keyword in case.get("expected_keywords", []):
-        if keyword.lower() not in answer.lower():
+        alternatives = [k.strip().lower() for k in keyword.split("|")]
+        if not any(a in answer.lower() for a in alternatives):
             result.failures.append(f"answer omits {keyword!r}")
 
     # Faithfulness: a citation that points past the excerpts actually supplied
@@ -150,7 +154,10 @@ def score(result: Result, check_answers: bool) -> None:
     if dangling:
         result.failures.append(f"cites excerpts that do not exist: {sorted(dangling)}")
 
-    if case.get("expect_unsupported"):
+    # Only meaningful when documents were actually consulted. On the direct
+    # route nothing was retrieved and nothing was claimed, so there is no
+    # documentary support to have overstated.
+    if case.get("expect_unsupported") and plan.sources:
         if not admits_the_miss(answer):
             result.failures.append("answered as though documented when it is not")
         if numbers and UNSUPPORTED_MARKER not in answer.lower():
@@ -209,12 +216,12 @@ def run(provider_name: str, check_answers: bool, limit: int | None) -> int:
         for failure in result.failures:
             say(f"         - {failure}")
 
-    report(results, check_answers)
+    report(results, check_answers, len(store))
     shutil.rmtree(INDEX, ignore_errors=True)
     return 1 if any(r.failures for r in results) else 0
 
 
-def report(results: list[Result], check_answers: bool) -> None:
+def report(results: list[Result], check_answers: bool, index_size: int) -> None:
     say("\n" + "=" * 74)
     say("RESULTS")
     say("=" * 74)
@@ -250,6 +257,18 @@ def report(results: list[Result], check_answers: bool) -> None:
     say(f"\nRetrieval hit@{config.TOP_K}       {hits}/{len(graded)} "
           f"({100 * hits / total:.0f}%)")
     say(f"Retrieval MRR        {reciprocal / total:.3f}")
+
+    # A score is only worth as much as the test behind it. Returning most of
+    # the index cannot fail, so state what share was returned rather than let
+    # a meaningless 100% pass for a good one.
+    returned = min(config.TOP_K, index_size)
+    share = returned / max(index_size, 1)
+    say(f"  retrieved {returned} of {index_size} chunks "
+        f"({100 * share:.0f}% of the index) per question")
+    if share > 0.25:
+        say("  WARNING: that is a large share of the corpus, so hit@k can")
+        say("  barely fail. Treat the score above as weak evidence - grow the")
+        say("  corpus or lower --top-k to make it mean something.")
 
     # --- Answers ----------------------------------------------------------
     if check_answers:
@@ -304,10 +323,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--answers", action="store_true",
                         help="also generate answers and score them (costs a call each)")
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--top-k", type=int, default=None,
+                        help="override TOP_K; lower makes retrieval harder to pass")
     args = parser.parse_args(argv)
 
     # Retrieval must actually run for hit@k to mean anything.
     config.FULL_CONTEXT_WORDS = 0
+    if args.top_k:
+        config.TOP_K = args.top_k
     return run(args.provider, args.answers, args.limit)
 
 

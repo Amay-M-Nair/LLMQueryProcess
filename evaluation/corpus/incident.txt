@@ -1,0 +1,30 @@
+Northwind Logistics - Service Incident Management
+
+Severity levels
+Severity 1 means a complete loss of service affecting all customers.
+Severity 2 means a major feature is unavailable or a subset of customers is
+fully blocked. Severity 3 means degraded performance with a workaround
+available. Severity 4 covers cosmetic issues and minor defects.
+
+Response targets
+Severity 1 incidents require acknowledgement within 15 minutes and updates
+every 30 minutes until resolved. Severity 2 requires acknowledgement within
+one hour and updates every two hours. Severity 3 is acknowledged within one
+business day. Severity 4 is handled in the normal backlog.
+
+Roles
+Every incident has a single incident commander, who coordinates but does not
+debug. A separate communications lead handles customer updates for Severity 1
+and 2. The on-call engineer may escalate to the incident commander at any
+time without justification.
+
+Postmortems
+A written postmortem is required for every Severity 1 and 2 incident, within
+five working days of resolution. Postmortems are blameless: they describe
+what the system allowed to happen, not who typed what. Action items must have
+a named owner and a due date.
+
+Communication
+Customer-facing status updates are published to the status page. Internal
+updates go to the incident channel. No individual customer is told anything
+that has not first appeared on the status page.

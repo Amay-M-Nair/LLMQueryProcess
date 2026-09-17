@@ -1,0 +1,28 @@
+Northwind Logistics - Procurement Standard
+
+Thresholds
+Purchases below 500 pounds may be approved by a line manager. Purchases
+between 500 and 10,000 pounds require two written quotations and department
+head approval. Purchases above 10,000 pounds require a competitive tender
+with at least three bidders and sign-off from the finance director.
+
+Preferred suppliers
+Where a preferred supplier exists for a category, it must be used unless a
+documented exception is approved. The preferred supplier list is reviewed
+every six months by the procurement committee.
+
+Contracts
+No contract may be signed by anyone other than a director or a person holding
+written delegated authority. Contracts with an initial term longer than three
+years require board approval. Automatic renewal clauses must be flagged to
+finance at the point of signature.
+
+Conflicts of interest
+Any personal relationship with a supplier or bidder must be declared in
+writing before the procurement begins. Staff who have declared a conflict may
+not participate in evaluation or scoring.
+
+Payment terms
+Standard payment terms are 30 days from receipt of a valid invoice. Early
+settlement discounts should be taken where the discount exceeds one percent.
+Disputed invoices must be raised with the supplier within 10 working days.
