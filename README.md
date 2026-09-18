@@ -291,6 +291,14 @@ so it means one new module in `vectorstore/` and no changes anywhere else.
 
 ## Known limits
 
+- **Charts and diagrams are read as loose text, not understood.** OCR recovers
+  the words and numbers in a figure but not its layout, and which bar a number
+  sits above is layout. A bar chart of Q1-Q4 came back as `240, 185, 150, 120`
+  and `Q1, Q2, Q3, Q4` on separate lines - every value correct, every pairing
+  lost. Asked for the Q1 figure, the answer was "240 refunds in Q1 [1]" when
+  the truth was 120, and it carried a citation, which makes a wrong number look
+  checked. Reading the page with a vision model instead of OCR would fix it;
+  until then, treat any answer drawn from a figure as unverified.
 - **No reranking.** Ranking is vector similarity blended with BM25. A
   cross-encoder reranker over the top 20 would improve it further.
 - **Questions about a document, in a large corpus.** "Who wrote this?" works
