@@ -41,16 +41,20 @@ def stream_answer(
     question: str,
     retrieved: list[tuple[Chunk, float]],
     provider: Provider | None = None,
+    length: str = prompts.DEFAULT_LENGTH,
 ) -> Iterator[str]:
     """Answer from the excerpts, with citations. Yields text as it arrives."""
     provider = provider or get_provider()
-    yield from provider.stream(prompts.RAG_SYSTEM, build_prompt(question, retrieved))
+    yield from provider.stream(
+        prompts.rag_system(length), build_prompt(question, retrieved)
+    )
 
 
 def stream_direct_answer(
     question: str,
     history: list[dict] | None = None,
     provider: Provider | None = None,
+    length: str = prompts.DEFAULT_LENGTH,
 ) -> Iterator[str]:
     """Answer from the model's own knowledge, with no excerpts and no citations.
 
@@ -59,6 +63,6 @@ def stream_direct_answer(
     """
     provider = provider or get_provider()
     system, user = prompts.direct_prompt(
-        question, history or [], config.HISTORY_TURNS
+        question, history or [], config.HISTORY_TURNS, length
     )
     yield from provider.stream(system, user)

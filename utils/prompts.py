@@ -73,7 +73,7 @@ Rules, in order:
 4. Never attach [n] to a claim its excerpt does not support. An uncited
    sentence under the heading is correct; a miscited one is a serious error.
 
-Be concise and direct. No preamble."""
+{length}"""
 
 DIRECT_SYSTEM = """You are answering from your own knowledge.
 
@@ -82,7 +82,9 @@ for it, so there are no excerpts and there is nothing to cite. Do not invent
 citations or refer to documents you were not shown.
 
 Where a question turns on something you are unsure of, say so rather than
-presenting a guess as fact. Be concise and direct. No preamble."""
+presenting a guess as fact.
+
+{length}"""
 
 REWRITE_SYSTEM = """You rewrite a follow-up question so it can be understood alone.
 
@@ -92,6 +94,50 @@ plain text - no quotes, no explanation, no preamble.
 
 Change as little as possible. If the question already stands on its own,
 return it unchanged. Never answer it."""
+
+
+# How long an answer should be. Two versions of each, because the constraint
+# differs by route: a cited answer that pads has to find more to say, and what
+# it finds is whatever sits just past what the excerpts support. So the
+# retrieval wording stays tied to the excerpts at every length, while the
+# direct wording is free to expand.
+LENGTHS = {
+    "Brief": {
+        "rag": "Answer in a sentence or two. No preamble.",
+        "direct": "Answer in a sentence or two. No preamble.",
+    },
+    "Standard": {
+        "rag": "Be concise and direct. No preamble.",
+        "direct": "Be concise and direct. No preamble.",
+    },
+    "Thorough": {
+        "rag": (
+            "Cover everything the excerpts say that bears on the question, "
+            "including conditions, exceptions and figures. Structure it with "
+            "short headings or bullets where that helps. Length must come from "
+            "the excerpts having more to say, never from restating a point at "
+            "greater length. No preamble."
+        ),
+        "direct": (
+            "Explain thoroughly. Give the reasoning, the relevant detail and an "
+            "example where one clarifies. Structure it with short headings or "
+            "bullets where that helps. No preamble."
+        ),
+    },
+}
+DEFAULT_LENGTH = "Standard"
+
+
+def rag_system(length: str = DEFAULT_LENGTH) -> str:
+    """The grounded answering prompt, at the requested depth."""
+    setting = LENGTHS.get(length, LENGTHS[DEFAULT_LENGTH])
+    return RAG_SYSTEM.format(length=setting["rag"])
+
+
+def direct_system(length: str = DEFAULT_LENGTH) -> str:
+    """The unaided answering prompt, at the requested depth."""
+    setting = LENGTHS.get(length, LENGTHS[DEFAULT_LENGTH])
+    return DIRECT_SYSTEM.format(length=setting["direct"])
 
 
 def history_block(history: list[dict], turns: int) -> str:
@@ -114,11 +160,14 @@ def rewrite_prompt(query: str, history: list[dict], turns: int) -> tuple[str, st
     )
 
 
-def direct_prompt(query: str, history: list[dict], turns: int) -> tuple[str, str]:
+def direct_prompt(
+    query: str, history: list[dict], turns: int, length: str = DEFAULT_LENGTH
+) -> tuple[str, str]:
     """A general-knowledge question, with enough history to stay coherent."""
+    system = direct_system(length)
     if not history:
-        return DIRECT_SYSTEM, query
-    return DIRECT_SYSTEM, (
+        return system, query
+    return system, (
         f"Conversation so far:\n{history_block(history, turns)}\n\n"
         f"Question:\n{query}"
     )

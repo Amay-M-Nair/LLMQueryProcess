@@ -75,7 +75,10 @@ GEMINI_FALLBACK_MODELS = [
     "gemini-3.1-flash-lite",
     "gemini-flash-latest",
 ]
-GEMINI_MAX_TOKENS = 4096
+# Room for a Thorough answer. The models themselves allow 65536, so this is
+# a guard against a runaway reply rather than a real ceiling - raise it if an
+# answer ever stops mid-sentence.
+GEMINI_MAX_TOKENS = 8192
 GEMINI_RETRY_ROUNDS = 3      # passes over the model list before giving up
 GEMINI_RETRY_BACKOFF = 2.0   # seconds, used only if the API suggests nothing
 GEMINI_MAX_WAIT = 45.0       # never block the UI longer than this between tries

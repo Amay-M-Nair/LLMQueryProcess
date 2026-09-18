@@ -18,7 +18,7 @@ import streamlit as st
 from backend.llm import PROVIDERS, ProviderError, ProviderNotReady, get_provider, model_for
 from backend.query_processor import QueryTrace, process
 from ingestion.pipeline import build_index
-from utils import config, env_file
+from utils import config, env_file, prompts
 from vectorstore.faiss_store import INDEX_FILE, VectorStore
 from vectorstore.metadata_store import METADATA_FILE
 
@@ -441,6 +441,8 @@ if "api_keys" not in st.session_state:
     st.session_state.api_keys = {}
 if "show_debug" not in st.session_state:
     st.session_state.show_debug = False
+if "length" not in st.session_state:
+    st.session_state.length = prompts.DEFAULT_LENGTH
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
 
@@ -621,6 +623,16 @@ with st.sidebar:
         st.session_state.theme = chosen
         st.rerun()
 
+    st.session_state.length = st.select_slider(
+        "Answer length",
+        options=list(prompts.LENGTHS),
+        value=st.session_state.length,
+        help=(
+            "Changes what the model is asked for, not how much it is allowed. "
+            "Thorough draws on more of the excerpts; it never pads."
+        ),
+    )
+
     st.session_state.show_debug = st.toggle(
         "Show reasoning",
         value=st.session_state.show_debug,
@@ -704,6 +716,7 @@ if question:
                 history=st.session_state.history,
                 provider=provider,
                 on_stage=lambda label: status.update(label=label),
+                length=st.session_state.length,
             )
         except Exception as exc:
             status.update(label="Could not work out how to answer", state="error")

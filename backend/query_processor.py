@@ -22,7 +22,7 @@ from backend.query_rewriter import Rewrite
 from backend.router import Route
 from ingestion.chunker import Chunk
 from ingestion.pipeline import retrieve
-from utils import config
+from utils import config, prompts
 from utils.preprocessing import Query, preprocess
 from vectorstore.faiss_store import VectorStore
 
@@ -83,6 +83,7 @@ def process(
     history: list[dict] | None = None,
     provider: Provider | None = None,
     on_stage: Callable[[str], None] | None = None,
+    length: str = prompts.DEFAULT_LENGTH,
 ) -> Plan:
     """Preprocess, classify, route, and prepare the answer.
 
@@ -175,7 +176,7 @@ def process(
             return Plan(
                 trace,
                 stream=lambda: rag.stream_answer(
-                    query.original, trace.retrieved, provider=provider
+                    query.original, trace.retrieved, provider=provider, length=length
                 ),
             )
 
@@ -185,7 +186,7 @@ def process(
     return Plan(
         trace,
         stream=lambda: rag.stream_direct_answer(
-            query.original, history, provider=provider
+            query.original, history, provider=provider, length=length
         ),
     )
 
