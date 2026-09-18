@@ -18,7 +18,7 @@ import streamlit as st
 from backend.llm import PROVIDERS, ProviderError, ProviderNotReady, get_provider, model_for
 from backend.query_processor import QueryTrace, process
 from ingestion.pipeline import build_index
-from utils import config, env_file, prompts
+from utils import config, env_file, examples, prompts
 from vectorstore.faiss_store import INDEX_FILE, VectorStore
 from vectorstore.metadata_store import METADATA_FILE
 
@@ -641,6 +641,7 @@ with st.sidebar:
 
     if st.session_state.history and st.button("New conversation"):
         st.session_state.history = []
+        st.session_state.pop("examples_for", None)   # draw a fresh set
         st.rerun()
 
 
@@ -675,19 +676,20 @@ has_docs = bool(store and len(store) > 0)
 asked = st.session_state.pop("pending_question", None)
 
 if not st.session_state.history and not asked and provider_ready:
+    # Drawn once and kept, because Streamlit re-runs this on every click and
+    # buttons that reshuffle under the cursor are worse than familiar ones.
+    # The signature includes the document, so uploading a file redraws them.
+    signature = store.sources[0] if has_docs else ""
+    if st.session_state.get("examples_for") != signature:
+        st.session_state.examples = examples.pick(signature or None)
+        st.session_state.examples_for = signature
+
     st.markdown('<p class="azriel-hint">Try</p>', unsafe_allow_html=True)
-    examples = [
-        (f"What does {store.sources[0]} say about my experience?", "from your documents")
-        if has_docs else
-        ("Upload a file to ask about your own documents", None),
-        ("Explain what a vector embedding is", "general knowledge"),
-        ("What is 15% of 240?", "worked out locally, no API call"),
-    ]
-    for label, note in examples:
+    for label, note in st.session_state.examples:
         if note is None:
             st.caption(label)
             continue
-        if st.button(label, key=f"eg-{label[:20]}"):
+        if st.button(label, key=f"eg-{label[:28]}"):
             st.session_state.pending_question = label
             st.rerun()
         st.caption(note)
