@@ -12,7 +12,8 @@ trained on.
 ```
   your files
       |
- [document_loader]   read PDFs / text into pages
+ [document_loader]   read PDFs, Word files and text into pages,
+      |              running OCR over any page that has no text layer
       |
     [chunker]        split each page into ~160-word overlapping windows
       |
@@ -139,6 +140,22 @@ marked answer is more use than a dead end, and the boundary stays visible.
 
 The first run downloads the embedding model (~90 MB), once.
 
+### What it can read
+
+`.pdf`, `.docx`, `.txt` and `.md`.
+
+A **scanned PDF** has no text layer - it is pictures of words - so its pages
+are rasterised and read back with OCR. That costs a few seconds a page, so it
+only happens to pages that yielded nothing on their own: a report that is
+typed with a scanned appendix only pays for the appendix. The OCR
+dependencies are about 47 MB and are optional; without them a scan is skipped
+with an explanation rather than silently indexed as empty.
+
+A **.docx** has no pages of its own - pagination belongs to whatever renders
+the file - so only page breaks the author inserted start a new page, and a
+document without them is page 1. Tables are read as well as paragraphs,
+because policy documents put their most citable facts in tables.
+
 Run the tests with:
 
 ```bash
@@ -160,7 +177,7 @@ so any single piece can be replaced without disturbing the rest.
 | | `rag.py` | Builds the prompt, hands it to the chosen provider |
 | | `llm.py` | Provider registry — picks one by name |
 | | `providers/` | One adapter per answer model (Gemini, Ollama, Claude) |
-| **ingestion** | `document_loader.py` | File → pages of text |
+| **ingestion** | `document_loader.py` | File → pages of text, OCR included |
 | | `chunker.py` | Pages → overlapping chunks |
 | | `embedder.py` | Text → vectors |
 | | `pipeline.py` | Ties the ingest together; `build_index` and `retrieve` |
@@ -274,9 +291,6 @@ so it means one new module in `vectorstore/` and no changes anywhere else.
 
 ## Known limits
 
-- **Scanned PDFs do not work.** If a PDF is page images rather than text, there
-  is nothing to extract; the app detects this and tells you. Fixing it needs an
-  OCR step.
 - **No reranking.** Ranking is vector similarity blended with BM25. A
   cross-encoder reranker over the top 20 would improve it further.
 - **Questions about a document, in a large corpus.** "Who wrote this?" works

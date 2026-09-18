@@ -64,15 +64,23 @@ def build_index(
             on_progress(f"Reading {name}")
 
         try:
-            pages = loaders.load_pages(path)
+            pages = loaders.load_pages(path, on_progress=on_progress)
         except Exception as exc:  # a corrupt or unreadable file shouldn't kill the run
             report.skipped.append((name, f"could not read: {exc}"))
             continue
 
         if loaders.looks_scanned(path, pages):
-            report.skipped.append(
-                (name, "no extractable text - looks like a scanned PDF, needs OCR")
-            )
+            # OCR has already had its turn by now, so say which of the two
+            # things went wrong rather than offering advice that may not apply.
+            if not loaders.ocr_available():
+                reason = ("no extractable text - looks like a scanned PDF. Install "
+                          "pymupdf and rapidocr-onnxruntime to read scans.")
+            elif not config.OCR_ENABLED:
+                reason = ("no extractable text - looks like a scanned PDF, and OCR "
+                          "is switched off in utils/config.py.")
+            else:
+                reason = "no extractable text - OCR could not read this scan either."
+            report.skipped.append((name, reason))
             continue
 
         if not pages:

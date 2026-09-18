@@ -93,6 +93,14 @@ ANTHROPIC_EFFORT = "medium"      # low | medium | high | xhigh | max
 ANTHROPIC_MAX_TOKENS = 16000     # thinking tokens count toward this
 USE_REFUSAL_FALLBACKS = True     # retry on another model if a request is declined
 
+# --- Reading documents -----------------------------------------------------
+# A scanned PDF has no text layer, so its pages are rasterised and read back
+# with OCR. It costs a few seconds per page, so it only runs on pages that
+# yielded nothing on their own - never on a document that is already text.
+OCR_ENABLED = True
+OCR_DPI = 200          # lower is faster and loses small print; 200 reads 9pt fine
+
+
 # --- Query processing ------------------------------------------------------
 # How many past exchanges the rewriter and the direct-answer path can see.
 # Enough to resolve "it" without burying the current question.

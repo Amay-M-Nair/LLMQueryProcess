@@ -460,7 +460,7 @@ with st.sidebar:
 
     uploads = st.file_uploader(
         "Add files",
-        type=["pdf", "txt", "md"],
+        type=["pdf", "txt", "md", "docx"],
         accept_multiple_files=True,
     )
 
