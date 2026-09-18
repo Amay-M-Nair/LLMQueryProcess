@@ -7,7 +7,9 @@ from typing import Callable
 from ingestion import document_loader as loaders
 from ingestion import embedder
 from ingestion.chunker import Chunk, chunk_pages
-from utils import config
+from utils import config, logs
+
+log = logs.get(__name__)
 from vectorstore.faiss_store import VectorStore
 from vectorstore.metadata_store import DocumentRecord, hash_file
 
@@ -132,6 +134,16 @@ def build_index(
         (report.reindexed if replacing else report.indexed).append(name)
 
     report.total_chunks = len(store)
+    # File names only. What is in them is the user's business and does not
+    # belong in a log file.
+    log.info(
+        "ingest: indexed %s, re-indexed %s, skipped %s; %d chunks added, %d total",
+        report.indexed or "nothing", report.reindexed or "nothing",
+        [name for name, _ in report.skipped] or "nothing",
+        report.chunks_added, report.total_chunks,
+    )
+    for name, reason in report.skipped:
+        log.info("skipped %s: %s", name, reason)
     return store, report
 
 

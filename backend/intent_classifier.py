@@ -18,7 +18,9 @@ from dataclasses import dataclass
 
 from backend import calculator
 from backend.llm import Provider, ProviderError, ProviderNotReady
-from utils import prompts
+from utils import logs, prompts
+
+log = logs.get(__name__)
 
 GENERAL = "general"
 CALCULATION = "calculation"
@@ -144,9 +146,12 @@ def classify(
     try:
         reply = provider.complete(system, user)
     except (ProviderNotReady, ProviderError) as exc:
-        return _fallback(has_index, f"classifier call failed: {exc}")
+        # Redacted here, not only when logged: this reason is also shown in
+        # the debug panel, and a client that puts the key in the request URL
+        # puts it in the error it raises.
+        return _fallback(has_index, f"classifier call failed: {logs.redact(exc)}")
     except Exception as exc:  # noqa: BLE001 - never let this sink the question
-        return _fallback(has_index, f"classifier call failed: {exc}")
+        return _fallback(has_index, f"classifier call failed: {logs.redact(exc)}")
 
     parsed = parse_reply(reply)
     if parsed is None:
@@ -169,6 +174,7 @@ def _fallback(has_index: bool, reason: str) -> Intent:
     whereas answering from memory when the files held the answer looks
     authoritative and is not.
     """
+    log.info("classification fell back: %s", reason)
     if has_index:
         return _intent(DOCUMENT_QUERY, "fallback", reason)
     return _intent(GENERAL, "fallback", reason)

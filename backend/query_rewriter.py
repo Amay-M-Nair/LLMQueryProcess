@@ -20,7 +20,9 @@ import re
 from dataclasses import dataclass
 
 from backend.llm import Provider, ProviderError, ProviderNotReady
-from utils import config, prompts
+from utils import config, logs, prompts
+
+log = logs.get(__name__)
 
 # Words that point at something said earlier rather than naming it.
 DANGLING_REFERENCE = re.compile(
@@ -96,13 +98,16 @@ def rewrite(
     system, user = prompts.rewrite_prompt(query, history, config.HISTORY_TURNS)
     try:
         reply = provider.complete(system, user)
-    except (ProviderNotReady, ProviderError):
+    except (ProviderNotReady, ProviderError) as exc:
+        log.info("rewrite unavailable, searching the original question: %s", exc)
         return Rewrite(query, original, False, "rewrite call failed")
     except Exception:  # noqa: BLE001 - a failed rewrite must not sink the question
+        log.warning("rewrite failed, searching the original question", exc_info=True)
         return Rewrite(query, original, False, "rewrite call failed")
 
     cleaned = reply.strip().strip('"').strip("'").strip()
     if looks_degenerate(cleaned, original):
+        log.info("discarded an unusable rewrite (%d chars)", len(cleaned))
         return Rewrite(query, original, False, "the rewrite was unusable")
 
     if cleaned.lower() == original.strip().lower():

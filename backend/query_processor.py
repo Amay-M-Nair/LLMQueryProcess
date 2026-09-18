@@ -22,7 +22,9 @@ from backend.query_rewriter import Rewrite
 from backend.router import Route
 from ingestion.chunker import Chunk
 from ingestion.pipeline import retrieve
-from utils import config, prompts
+from utils import config, logs, prompts
+
+log = logs.get(__name__)
 from utils.preprocessing import Query, preprocess
 from vectorstore.faiss_store import VectorStore
 
@@ -119,6 +121,10 @@ def process(
         trace.api_calls += 1
 
     trace.route = router.route(trace.intent, has_index)
+    log.info(
+        "%d-word question -> intent=%s (%s) route=%s",
+        query.word_count, trace.intent.name, trace.intent.method, trace.route.name,
+    )
     if trace.route.downgraded_from:
         trace.notes.append(
             f"asked for {trace.route.downgraded_from}, but nothing is indexed"

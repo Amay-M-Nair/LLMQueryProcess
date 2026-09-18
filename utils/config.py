@@ -93,6 +93,14 @@ ANTHROPIC_EFFORT = "medium"      # low | medium | high | xhigh | max
 ANTHROPIC_MAX_TOKENS = 16000     # thinking tokens count toward this
 USE_REFUSAL_FALLBACKS = True     # retry on another model if a request is declined
 
+# --- Logging ---------------------------------------------------------------
+# Where the detail goes when the user gets a sentence. Set LOG_FILE to None to
+# keep everything on stderr, which is what you want if the terminal is right
+# there in front of you.
+LOG_LEVEL = "INFO"
+LOG_FILE = PROJECT_ROOT / "data" / "azriel.log"
+
+
 # --- Reading documents -----------------------------------------------------
 # A scanned PDF has no text layer, so its pages are rasterised and read back
 # with OCR. It costs a few seconds per page, so it only runs on pages that

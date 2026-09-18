@@ -19,7 +19,9 @@ from typing import Callable
 
 from pypdf import PdfReader
 
-from utils import config
+from utils import config, logs
+
+log = logs.get(__name__)
 
 SUPPORTED_SUFFIXES = {".pdf", ".txt", ".md", ".docx"}
 
@@ -123,7 +125,11 @@ def _ocr_pdf_pages(path, numbers, on_progress) -> list[tuple[int, str]]:
                 pixmap = document[number - 1].get_pixmap(dpi=config.OCR_DPI)
                 result, _ = reader(pixmap.tobytes("png"))
             except Exception:
-                # One unreadable page should not lose the rest of the document.
+                # One unreadable page should not lose the rest of the document,
+                # but it should not vanish either - a document that comes back
+                # short is otherwise inexplicable.
+                log.warning("OCR failed on %s page %d", path.name, number,
+                            exc_info=True)
                 continue
 
             lines = [line[1] for line in result] if result else []

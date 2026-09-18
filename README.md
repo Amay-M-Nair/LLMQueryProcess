@@ -185,6 +185,7 @@ so any single piece can be replaced without disturbing the rest.
 | | `metadata_store.py` | Chunk records and the register of indexed documents |
 | | `keyword.py` | BM25 keyword scoring, blended into the ranking |
 | **utils** | `config.py` | Every tunable number in one place |
+| | `logs.py` | Where the detail goes when the user gets a sentence |
 | | `preprocessing.py` | Tidies a question without changing what it asks |
 | | `prompts.py` | Every prompt the system sends |
 | | `check.py` | `python -m utils.check` — tells you what is set up |
@@ -288,6 +289,28 @@ pgvector is the right answer for multiple users, deployed, with filtered
 search; the wrong one for a single person on a laptop with a few hundred
 chunks. Swapping later is a small job — everything goes through `VectorStore`,
 so it means one new module in `vectorstore/` and no changes anywhere else.
+
+## When something goes wrong
+
+Every failure is reported twice: once to you, in language that says what to
+do, and once to the log, with whatever the exception actually said. The
+second half matters because the first was written to be reassuring rather
+than diagnostic, and because several failures are swallowed deliberately - a
+rewrite that fails falls back to the original question, an OCR page that
+fails is skipped - and would otherwise leave no trace at all.
+
+Logs go to stderr and to `data/azriel.log`. Set `LOG_FILE = None` in
+`utils/config.py` to keep them on stderr alone.
+
+**Two things never reach them: API keys, and the contents of your documents.**
+Keys because logs get pasted into issues; documents because a log file is not
+where your private files belong. Both are covered by tests that plant a
+secret and assert it does not appear - which is how the one real leak here
+was found. A provider whose error message carried the key in a URL had that
+message copied into the intent's `reason`, which is logged *and* shown in the
+debug panel. Redaction now happens at the logging filter, so nothing reaches
+a handler unredacted, and again where the reason is built, so the panel is
+covered too.
 
 ## Known limits
 
