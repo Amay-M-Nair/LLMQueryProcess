@@ -43,14 +43,11 @@ anthropic>=1.0         # anthropic - paid
 # Vector index
 faiss-cpu>=1.9
 
-# --- The API (optional) ----------------------------------------------------
-# Only needed to run api.main as a separate service. The page works without
-# them by calling the pipeline in its own process - see API_URL in
-# utils/config.py.
-fastapi>=0.115
-uvicorn[standard]>=0.30
-python-multipart>=0.0.9    # multipart uploads
-httpx>=0.27                # the client the page uses to reach the service
+# --- Reaching a remote pipeline (optional) ---------------------------------
+# api/client.py can call the pipeline in this process or over HTTP, and the
+# page cannot tell which it has. Local is the default and needs nothing; httpx
+# is imported only when API_URL names a service to talk to.
+httpx>=0.27
 
 # --- Development -----------------------------------------------------------
 pytest>=8.0

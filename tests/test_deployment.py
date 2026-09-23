@@ -55,20 +55,34 @@ def test_a_visitor_collection_name_is_valid_and_unguessable():
         assert len(name) >= 32, "short enough to guess"
 
 
-def test_the_dockerfile_defaults_to_the_safe_settings():
-    """An image run without env vars must not come up sharing one index."""
-    text = (config.PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "AZRIEL_COLLECTIONS=visitor" in text
-    assert "AZRIEL_PUBLIC=1" in text
+def test_the_cpu_torch_pin_survives():
+    """Without it the Linux wheel drags in 2.5 GB of CUDA for an absent GPU."""
+    text = (config.PROJECT_ROOT / "requirements.txt").read_text(encoding="utf-8")
+    assert "download.pytorch.org/whl/cpu" in text
+    lines = [line.strip() for line in text.splitlines()]
+    assert any(line.startswith("torch>=") for line in lines), (
+        "the index is useless without asking for torch by name"
+    )
 
 
-def test_the_dockerfile_bakes_the_embedding_model_in():
-    """Otherwise the first question after each deploy waits on a download."""
-    text = (config.PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "HuggingFaceEmbeddings" in text
+def test_packages_txt_is_bare_package_names():
+    """Community Cloud feeds this to apt-get; a comment would be a package."""
+    lines = (config.PROJECT_ROOT / "packages.txt").read_text(
+        encoding="utf-8"
+    ).split()
+    assert lines, "packages.txt is empty"
+    for entry in lines:
+        assert not entry.startswith("#"), f"{entry!r} would be apt-get installed"
+    assert "libgl1" in lines, "OCR imports opencv, which links against libGL"
 
 
-def test_the_dockerignore_keeps_secrets_and_bulk_out():
-    text = (config.PROJECT_ROOT / ".dockerignore").read_text(encoding="utf-8")
-    for entry in (".env", ".venv/", "data/", ".git/"):
-        assert entry in text, f"{entry} would be copied into the image"
+def test_the_secrets_are_read_from_the_environment(reloaded):
+    """Community Cloud sets root-level secrets as environment variables.
+
+    This is the whole deployment contract: paste three lines into Secrets and
+    the app comes up isolated. If config stopped reading the environment, a
+    deployment would silently come up shared.
+    """
+    settings = reloaded(AZRIEL_COLLECTIONS="visitor", AZRIEL_PUBLIC="1")
+    assert settings.COLLECTION_MODE == "visitor"
+    assert settings.PUBLIC is True

@@ -96,9 +96,9 @@ USE_REFUSAL_FALLBACKS = True     # retry on another model if a request is declin
 
 # --- Reaching the pipeline -------------------------------------------------
 # None means the page calls the pipeline in this process, which is one fewer
-# thing to run and right for a single user. Point it at a running api.main
-# ("http://localhost:8000") and the page talks to that instead, which is what
-# lets the service live on another machine.
+# thing to run and right for a single user. Point it at a service speaking the
+# same newline-delimited JSON ("http://localhost:8000") and the page talks to
+# that instead, which is what lets the pipeline live on another machine.
 API_URL = None
 
 # The namespace documents are kept under. Each collection has its own index,

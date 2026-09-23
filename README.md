@@ -162,46 +162,25 @@ Run the tests with:
 .venv/Scripts/python.exe -m pytest
 ```
 
-## Running it as a service
+## Collections
 
-The page does not import the pipeline. It holds a client, and the client
-either calls the pipeline in the same process or reaches a running service
-over HTTP. Nothing above that line knows which.
+Documents are kept in **collections**. A collection is a namespace with its
+own index, and no collection can retrieve another's documents.
 
-By default it is the first, because one process is easier to run than two and
-a single user gains nothing from a network hop. To split them:
-
-```bash
-.venv/Scripts/python.exe -m uvicorn api.main:app --port 8000
-```
-
-Then set `API_URL = "http://localhost:8000"` in `utils/config.py` and start
-the page as usual. Interactive documentation is at `/docs`.
-
-### Collections
-
-The service keeps documents in **collections**. A collection is a name the
-caller chooses and keeps sending; each has its own index, and no collection
-can retrieve another's documents. That is what makes the endpoint safe to
-expose, and it is why the API needs no login: it needs a namespace, not an
-identity.
+On one machine that is invisible: everything goes in `default`, because every
+visitor is you. On a URL it is the whole ballgame - the page gives each
+browser session a collection of its own, so one visitor's question can never
+retrieve and cite another visitor's files. See *Deploying it* below.
 
 Collection names become directory names, so they are checked rather than
-trusted - letters, digits, dashes and underscores only. A caller who sends
+trusted - letters, digits, dashes and underscores only. A name like
 `../../etc` gets a rejection, not a path.
 
-| | |
-|---|---|
-| `GET /health` | whether it can answer, and which model would |
-| `GET /collections/{c}` | what is indexed |
-| `POST /collections/{c}/documents` | index files |
-| `DELETE /collections/{c}` | remove the index and the documents behind it |
-| `POST /collections/{c}/ask` | answer, streaming newline-delimited JSON |
-
-`ask` streams four kinds of object: `stage` while the route is worked out,
-one `route` saying what was decided, many `token` pieces of the answer, then
-`sources`. Prose alone would mean a second request that had to re-run the
-question to find out what the first one did.
+The page does not import the pipeline. It holds a client, and the client
+either calls the pipeline in the same process or reaches a remote service
+over HTTP; nothing above that line knows which. In-process is the default and
+the only one that ships here. The seam exists so the UI depends on an
+interface rather than on the pipeline itself.
 
 ## Project layout
 
@@ -424,44 +403,12 @@ AZRIEL_PUBLIC=1              refuse to start if the above is not set
 
 `AZRIEL_PUBLIC` exists because the failure is silent. A deployment left on
 shared looks perfectly normal until two people use it, and nothing on the
-page says otherwise - so it stops rather than serves. The Dockerfile sets
-both; on Streamlit Community Cloud they are two lines of the secrets you
-paste in.
+page says otherwise - so it stops rather than serves. Both are lines of
+the secrets you paste in when deploying.
 
 Visitor collections are forgotten when the tab closes. That is the trade:
 uploading again after a refresh, in exchange for documents that are nobody
 else's business.
-
-### Docker
-
-```bash
-docker build -t azriel .
-```
-
-```bash
-docker run -p 8501:8501 -e GOOGLE_API_KEY=... azriel
-```
-
-The image bakes the embedding model in, so the first question after a deploy
-does not wait on a 90 MB download - and works at all on a host with no route
-to HuggingFace. Most of its size is torch, which is why `requirements.txt`
-asks for the CPU build by name; without that pin the Linux wheel drags in
-several gigabytes of CUDA libraries for a GPU that is not there.
-
-The same image runs the API:
-
-```bash
-docker run -p 8000:8000 -e GOOGLE_API_KEY=... azriel   python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
-```
-
-### Somewhere to put it
-
-| | Cost | Fit |
-|---|---|---|
-| **Streamlit Community Cloud** | free | **What this repository is set up for.** Deploys from GitHub, no Docker. 2.7 GB memory, which fits - see below |
-| **Hugging Face Spaces** | $9/mo | Free hardware, but creating a Docker Space now needs a PRO account. The Dockerfile here is ready for it |
-| **Render / Railway / Fly** | ~$5-7/mo | Docker and a persistent disk. What to use if the API's named collections must survive a restart |
-| **Google Cloud Run** | free tier | Runs the image, scales to zero. Needs a billing account even to stay inside the free limits |
 
 ### Streamlit Community Cloud
 
@@ -500,9 +447,9 @@ limits", that is what happened.
 
 ### What is still true after deploying
 
-- **The filesystem is ephemeral** unless you mount a disk. For the page's
-  visitor collections that is the intent; for the API's named collections it
-  means an index disappears when the container is replaced.
+- **The filesystem is ephemeral.** For visitor collections that is the
+  intent: documents go when the tab does. Nothing an app writes survives a
+  reboot, so the index is always rebuilt from what visitors upload.
 - **One free-tier key serves every visitor.** The sidebar lets someone bring
   their own, which is the only thing that scales past twenty questions a day.
 - **The model reads figures but does not understand them** - see the limits

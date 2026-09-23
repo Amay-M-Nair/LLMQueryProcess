@@ -419,7 +419,7 @@ def render_trace(trace: dict) -> None:
 
 # --- State -----------------------------------------------------------------
 # The page no longer touches the pipeline. It holds a client, which either
-# calls it in this process or reaches a running api.main over HTTP - set
+# calls it in this process or reaches a remote service over HTTP - set
 # API_URL in utils/config.py to choose. Neither is visible from here.
 client = get_client()
 def collection_for_session() -> str:

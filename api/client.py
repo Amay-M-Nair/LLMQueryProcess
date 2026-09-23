@@ -7,7 +7,9 @@ another machine without the page noticing.
 
 Local is the default, because one process is easier to run than two and
 nothing about a single-user app needs a network hop. Set API_URL in
-utils/config.py to point the page at a running service instead.
+utils/config.py to point the page at a remote service instead. No such
+service ships here any more - the HTTP half is the seam, kept because it is
+what stops app.py importing the pipeline directly.
 """
 
 import json
@@ -113,7 +115,7 @@ class LocalClient:
 
 
 class HttpClient:
-    """Calls a running api.main service.
+    """Calls a remote service over HTTP.
 
     The ask() stream is read line by line rather than waited for: the whole
     reason the service emits newline-delimited JSON is so the page can show
