@@ -15,12 +15,9 @@ import re
 
 import streamlit as st
 
+from api.client import get_client
 from backend.llm import PROVIDERS, ProviderError, ProviderNotReady, get_provider, model_for
-from backend.query_processor import QueryTrace, process
-from ingestion.pipeline import build_index
 from utils import config, env_file, examples, prompts
-from vectorstore.faiss_store import INDEX_FILE, VectorStore
-from vectorstore.metadata_store import METADATA_FILE
 
 APP_NAME = "Azriel"
 APP_MARK = "Ω"   # omega, the tab icon and the sidebar lockup
@@ -385,51 +382,47 @@ def render_sources(sources: list[tuple[str, float, str]]) -> None:
             st.caption(text)
 
 
-def render_trace(trace: QueryTrace) -> None:
-    """How the question was handled. Off by default, invaluable when wrong."""
-    if not st.session_state.show_debug:
+def render_trace(trace: dict) -> None:
+    """How the question was handled. Off by default, invaluable when wrong.
+
+    A plain dict rather than the QueryTrace object, because the same fields
+    have to survive a trip over HTTP when the page is talking to a service.
+    """
+    if not st.session_state.show_debug or not trace:
         return
 
     with st.expander("Reasoning"):
-        intent, route = trace.intent, trace.route
         left, right = st.columns(2)
         with left:
-            st.markdown(f"**Intent** `{intent.name}`")
-            st.caption(f"decided by {intent.method} - {intent.reason}")
+            st.markdown(f"**Intent** `{trace['intent']}`")
+            st.caption(f"decided by {trace['method']} - {trace['intent_reason']}")
         with right:
-            st.markdown(f"**Route** `{route.name}`")
-            st.caption(route.reason)
+            st.markdown(f"**Route** `{trace['route']}`")
+            st.caption(trace["route_reason"])
 
-        if trace.rewrite and trace.rewrite.changed:
+        if trace.get("searched_for"):
             st.markdown("**Searched for**")
-            st.caption(f"{trace.rewrite.original!r} -> {trace.rewrite.query!r}")
+            st.caption(f"{trace['searched_for']!r}")
 
-        for note in trace.notes:
+        for note in trace.get("notes", []):
             st.warning(note, icon=":material/info:")
 
-        stages = " · ".join(f"{k} {v*1000:.0f}ms" for k, v in trace.timings.items())
+        timings = trace.get("timings", {})
+        stages = " · ".join(f"{name} {ms}ms" for name, ms in timings.items())
+        calls = trace.get("api_calls", 0)
         st.caption(
-            f"{trace.api_calls} API call{'' if trace.api_calls == 1 else 's'} · "
-            f"{stages or 'no timed stages'} · {trace.total_seconds:.2f}s total"
+            f"{calls} API call{'' if calls == 1 else 's'} · "
+            f"{stages or 'no timed stages'} · {sum(timings.values())}ms total"
         )
 
 
-def clear_index() -> None:
-    for filename in (INDEX_FILE, METADATA_FILE):
-        (config.INDEX_DIR / filename).unlink(missing_ok=True)
-    st.session_state.store = None
-    st.session_state.load_error = None
-
-
 # --- State -----------------------------------------------------------------
-if "store" not in st.session_state:
-    try:
-        st.session_state.store = VectorStore.load(config.INDEX_DIR)
-    except Exception as exc:
-        # An index left by an older version, or a half-written one. Say so
-        # rather than crashing on load with a stack trace.
-        st.session_state.store = None
-        st.session_state.load_error = str(exc)
+# The page no longer touches the pipeline. It holds a client, which either
+# calls it in this process or reaches a running api.main over HTTP - set
+# API_URL in utils/config.py to choose. Neither is visible from here.
+client = get_client()
+COLLECTION = config.DEFAULT_COLLECTION
+
 if "history" not in st.session_state:
     st.session_state.history = []
 if "provider_name" not in st.session_state:
@@ -448,10 +441,17 @@ if "theme" not in st.session_state:
 
 apply_theme(st.session_state.theme)
 
-store: VectorStore | None = st.session_state.store
+try:
+    index = client.describe(COLLECTION)
+    index_error = None
+except Exception as exc:
+    # An index from an older version, a half-written one, or a service that
+    # is not running. Say so rather than crashing with a stack trace.
+    index = {"documents": [], "chunks": 0}
+    index_error = str(exc)
 
-if st.session_state.get("load_error"):
-    st.error(f"Could not open the saved index: {st.session_state.load_error}")
+if index_error:
+    st.error(f"Could not read the index: {index_error}")
 
 
 # --- Sidebar ---------------------------------------------------------------
@@ -465,24 +465,13 @@ with st.sidebar:
     )
 
     if st.button("Index", type="primary", disabled=not uploads):
-        config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        saved_paths = []
-        for upload in uploads:
-            destination = config.UPLOAD_DIR / upload.name
-            destination.write_bytes(upload.getbuffer())
-            saved_paths.append(destination)
-
         status = st.status("Indexing", expanded=True)
         try:
-            new_store, report = build_index(
-                saved_paths,
-                existing=store,
+            report = client.add_documents(
+                COLLECTION,
+                [(upload.name, upload.getvalue()) for upload in uploads],
                 on_progress=lambda message: status.write(message),
             )
-            new_store.save(config.INDEX_DIR)
-            st.session_state.store = new_store
-            store = new_store
-
             status.update(label=f"{report.chunks_added} passages added", state="complete")
             for name in report.reindexed:
                 st.caption(f"{name} re-indexed - contents had changed")
@@ -492,24 +481,24 @@ with st.sidebar:
                 st.rerun()
         except Exception as exc:
             status.update(label="Indexing failed", state="error")
-            st.exception(exc)
+            st.error(str(exc))
 
     st.divider()
 
-    if store and len(store) > 0:
-        for name, record in store.documents.items():
-            st.caption(f"{name} · {record.chunk_count}")
-        st.caption(f"{len(store)} passages in total")
+    if index["chunks"]:
+        for document in index["documents"]:
+            st.caption(f"{document['name']} · {document['chunks']}")
+        st.caption(f"{index['chunks']} passages in total")
 
         if st.button("Clear"):
-            clear_index()
+            client.clear(COLLECTION)
             st.session_state.history = []
             st.rerun()
-    elif st.session_state.get("load_error"):
-        # The index exists but could not be opened, so the usual Clear button
+    elif index_error:
+        # The index exists but could not be read, so the usual Clear button
         # above is out of reach - offer it here or there is no way out.
         if st.button("Delete unreadable index"):
-            clear_index()
+            client.clear(COLLECTION)
             st.rerun()
     else:
         st.caption("Nothing indexed. General questions still work.")
@@ -672,14 +661,14 @@ for entry in st.session_state.history:
 # A blank column and a text box tell a first-time visitor nothing, least of
 # all that this answers questions having nothing to do with their files. One
 # example per route says it faster than a paragraph would.
-has_docs = bool(store and len(store) > 0)
+has_docs = bool(index["chunks"])
 asked = st.session_state.pop("pending_question", None)
 
 if not st.session_state.history and not asked and provider_ready:
     # Drawn once and kept, because Streamlit re-runs this on every click and
     # buttons that reshuffle under the cursor are worse than familiar ones.
     # The signature includes the document, so uploading a file redraws them.
-    signature = store.sources[0] if has_docs else ""
+    signature = index["documents"][0]["name"] if has_docs else ""
     if st.session_state.get("examples_for") != signature:
         st.session_state.examples = examples.pick(signature or None)
         st.session_state.examples_for = signature
@@ -707,54 +696,58 @@ if question:
         st.write(question)
 
     with st.chat_message("assistant"):
-        # st.status carries the stage names out of the orchestrator, so the
+        # st.status carries the stage names out of the pipeline, so the
         # several seconds spent deciding how to answer look like progress
         # rather than a frozen page.
         status = st.status("Reading your question", expanded=False)
+        slot = st.empty()
+        answer, trace, sources = "", None, []
+
         try:
-            plan = process(
+            for event in client.ask(
+                COLLECTION,
                 question,
-                store=store,
                 history=st.session_state.history,
-                provider=provider,
-                on_stage=lambda label: status.update(label=label),
                 length=st.session_state.length,
-            )
-        except Exception as exc:
-            status.update(label="Could not work out how to answer", state="error")
-            st.error(str(exc))
-            st.stop()
+            ):
+                kind = event.get("type")
 
-        route = plan.trace.route.name
-        status.update(label=SUMMARIES.get(route, route), state="complete")
+                if kind == "stage":
+                    status.update(label=event["text"])
 
-        answer = None
-        if plan.answer is not None:
-            # Known without a model - arithmetic.
-            st.markdown(plan.answer)
-            answer = plan.answer
-        elif plan.message is not None:
-            st.info(plan.message)
-        else:
-            slot = st.empty()
-            answer = ""
-            try:
-                for piece in plan.stream():
-                    answer += piece
+                elif kind == "route":
+                    trace = event
+                    status.update(
+                        label=SUMMARIES.get(event["route"], event["route"]),
+                        state="complete",
+                    )
+
+                elif kind == "token":
+                    answer += event["text"]
                     slot.markdown(answer)
-                # Re-render once complete so the citation markers can be
-                # styled; doing it per chunk would fight the stream.
-                slot.markdown(decorate_citations(answer), unsafe_allow_html=True)
-            except (ProviderNotReady, ProviderError) as exc:
-                slot.error(str(exc))
-                answer = None
-            except Exception as exc:
-                slot.error(f"The request failed: {exc}")
-                answer = None
 
-        sources = [(chunk.label, score, chunk.text) for chunk, score in plan.sources]
+                elif kind == "sources":
+                    sources = [
+                        (s["label"], s["score"], s["text"]) for s in event["sources"]
+                    ]
+
+                elif kind == "error":
+                    status.update(label="That did not work", state="error")
+                    slot.error(event["text"])
+                    answer = ""
+        except Exception as exc:
+            status.update(label="That did not work", state="error")
+            slot.error(str(exc))
+            answer = ""
+
+        if answer:
+            # Re-render once complete so the citation markers can be styled;
+            # doing it per token would fight the stream.
+            slot.markdown(decorate_citations(answer), unsafe_allow_html=True)
+
         render_sources(sources)
-        render_trace(plan.trace)
+        if trace:
+            render_trace(trace)
 
         if answer:
             st.session_state.history.append(
@@ -762,6 +755,6 @@ if question:
                     "question": question,
                     "answer": answer,
                     "sources": sources,
-                    "trace": plan.trace,
+                    "trace": trace,
                 }
             )

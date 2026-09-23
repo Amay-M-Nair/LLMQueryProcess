@@ -93,6 +93,18 @@ ANTHROPIC_EFFORT = "medium"      # low | medium | high | xhigh | max
 ANTHROPIC_MAX_TOKENS = 16000     # thinking tokens count toward this
 USE_REFUSAL_FALLBACKS = True     # retry on another model if a request is declined
 
+# --- Reaching the pipeline -------------------------------------------------
+# None means the page calls the pipeline in this process, which is one fewer
+# thing to run and right for a single user. Point it at a running api.main
+# ("http://localhost:8000") and the page talks to that instead, which is what
+# lets the service live on another machine.
+API_URL = None
+
+# The namespace documents are kept under. Each collection has its own index,
+# and no collection can retrieve another's documents.
+DEFAULT_COLLECTION = "default"
+
+
 # --- Logging ---------------------------------------------------------------
 # Where the detail goes when the user gets a sentence. Set LOG_FILE to None to
 # keep everything on stderr, which is what you want if the terminal is right

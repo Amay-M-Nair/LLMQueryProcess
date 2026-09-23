@@ -162,6 +162,47 @@ Run the tests with:
 .venv/Scripts/python.exe -m pytest
 ```
 
+## Running it as a service
+
+The page does not import the pipeline. It holds a client, and the client
+either calls the pipeline in the same process or reaches a running service
+over HTTP. Nothing above that line knows which.
+
+By default it is the first, because one process is easier to run than two and
+a single user gains nothing from a network hop. To split them:
+
+```bash
+.venv/Scripts/python.exe -m uvicorn api.main:app --port 8000
+```
+
+Then set `API_URL = "http://localhost:8000"` in `utils/config.py` and start
+the page as usual. Interactive documentation is at `/docs`.
+
+### Collections
+
+The service keeps documents in **collections**. A collection is a name the
+caller chooses and keeps sending; each has its own index, and no collection
+can retrieve another's documents. That is what makes the endpoint safe to
+expose, and it is why the API needs no login: it needs a namespace, not an
+identity.
+
+Collection names become directory names, so they are checked rather than
+trusted - letters, digits, dashes and underscores only. A caller who sends
+`../../etc` gets a rejection, not a path.
+
+| | |
+|---|---|
+| `GET /health` | whether it can answer, and which model would |
+| `GET /collections/{c}` | what is indexed |
+| `POST /collections/{c}/documents` | index files |
+| `DELETE /collections/{c}` | remove the index and the documents behind it |
+| `POST /collections/{c}/ask` | answer, streaming newline-delimited JSON |
+
+`ask` streams four kinds of object: `stage` while the route is worked out,
+one `route` saying what was decided, many `token` pieces of the answer, then
+`sources`. Prose alone would mean a second request that had to re-run the
+question to find out what the first one did.
+
 ## Project layout
 
 The code is split into four layers. Each depends only on the layers below it,
