@@ -7,17 +7,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
 # Dependencies first, so editing a source file does not reinstall 700 MB.
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Installed as root into /usr/local, where every user can read them.
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY . .
+# Hugging Face Spaces runs the container as uid 1000, not root, and so do
+# several other hosts. Everything below therefore belongs to that user: a
+# root-owned /app/data means the first upload fails with a permission error,
+# and a model cached into /root/.cache is invisible to it.
+RUN useradd --create-home --uid 1000 user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
 
-# Bake the embedding model into the image. Without this the first question
-# after every deploy waits on a 90 MB download, and a container with no
-# network to HuggingFace never answers at all.
+WORKDIR /app
+RUN chown user:user /app
+USER user
+
+COPY --chown=user:user . /app
+
+# Bake the embedding model into the image, into this user's cache. Without
+# this the first question after every deploy waits on a 90 MB download, and a
+# container with no network to HuggingFace never answers at all.
 RUN python -c "from langchain_huggingface import HuggingFaceEmbeddings; \
     HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')"
 

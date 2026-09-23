@@ -1,3 +1,14 @@
+---
+title: Azriel
+emoji: "Ω"
+colorFrom: gray
+colorTo: gray
+sdk: docker
+app_port: 8501
+pinned: false
+short_description: Ask questions about your own documents, cited back to the page.
+---
+
 # Azriel
 
 Ask questions about your own PDFs and notes. Answers come only from the files
@@ -455,13 +466,48 @@ docker run -p 8000:8000 -e GOOGLE_API_KEY=... azriel   python -m uvicorn api.mai
 
 | | Free tier | Fit |
 |---|---|---|
-| **Hugging Face Spaces** | 16 GB memory | **Best.** Native Streamlit, secrets in settings, built for dependencies this size |
+| **Hugging Face Spaces** | 16 GB memory | **Best**, and what this repository is set up for - see below. Secrets in settings, built for dependencies this size |
 | **Render / Railway** | limited, then paid | Docker and a persistent disk. What to use if the API's named collections must survive a restart |
 | **Streamlit Community Cloud** | ~1 GB memory | Tight. The install is ~720 MB before the model, so it may not start |
 
 Set `GOOGLE_API_KEY` as a secret in the host's settings, never in the image.
 `python-dotenv` falls back to real environment variables, so nothing in the
 code changes.
+
+### Hugging Face Spaces
+
+The recommended host, and the one the repository is set up for: the front
+matter at the top of this file is what tells a Space it is a Docker Space
+serving port 8501.
+
+1. New Space at huggingface.co/new-space. SDK **Docker**, hardware **CPU
+   basic**.
+2. Settings -> Variables and secrets -> **New secret**, named
+   `GOOGLE_API_KEY`. A secret, not a variable: variables are printed in the
+   build log.
+3. Push this repository to the Space:
+
+```bash
+git remote add space https://huggingface.co/spaces/<your-username>/azriel
+git push space main
+```
+
+The first build takes around ten minutes, most of it torch. Afterwards the
+app is at `https://<your-username>-azriel.hf.space`, and the same page with
+Hugging Face's header around it is at
+`https://huggingface.co/spaces/<your-username>/azriel`.
+
+Two things about the free tier. A Space **sleeps after 48 hours** without
+traffic, so the visitor after that waits out a container start. And a Space
+**serves one port**, so the URL is either the page or the API - running both
+means two Spaces, with `API_URL` in `utils/config.py` pointing the first at
+the second.
+
+The container runs as uid 1000 rather than root, which is why the Dockerfile
+creates a user and hands it `/app` before copying anything in. Built the
+other way the image looks fine and fails on the first upload, with the
+embedding model re-downloaded on every start because the cache was written
+to a home directory that the running user does not have.
 
 ### What is still true after deploying
 
