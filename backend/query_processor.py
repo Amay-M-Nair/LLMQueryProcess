@@ -182,7 +182,8 @@ def process(
             return Plan(
                 trace,
                 stream=lambda: rag.stream_answer(
-                    query.original, trace.retrieved, provider=provider, length=length
+                    query.original, trace.retrieved, provider=provider,
+                    length=length, history=history,
                 ),
             )
 

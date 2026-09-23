@@ -24,15 +24,36 @@ __all__ = [
 ]
 
 
-def build_prompt(question: str, retrieved: list[tuple[Chunk, float]]) -> str:
-    """Lay the excerpts out as a numbered list the model can cite by number."""
+def build_prompt(
+    question: str,
+    retrieved: list[tuple[Chunk, float]],
+    history: list[dict] | None = None,
+) -> str:
+    """Lay the excerpts out as a numbered list the model can cite by number.
+
+    The conversation goes above them when there is one. Rewriting solves a
+    different problem: it fixes what gets searched for, so "where does that
+    figure come from?" retrieves the right excerpts and still reads as a
+    non-sequitur, because the model writing the answer never saw what it was
+    being asked about.
+
+    It is kept in its own block, and the system prompt says plainly that it is
+    not evidence. Given a conversation and sources run together, a model will
+    cite the conversation.
+    """
     blocks = []
     for index, (chunk, _score) in enumerate(retrieved, start=1):
         blocks.append(f"[{index}] Source: {chunk.label}\n{chunk.text}")
 
     excerpts = "\n\n".join(blocks) if blocks else "(no excerpts were retrieved)"
+
+    preamble = ""
+    if history:
+        conversation = prompts.history_block(history, config.HISTORY_TURNS)
+        preamble = f"Conversation so far:\n{conversation}\n\n---\n\n"
+
     return (
-        f"Here are the source excerpts:\n\n{excerpts}\n\n"
+        f"{preamble}Here are the source excerpts:\n\n{excerpts}\n\n"
         f"---\n\nQuestion: {question}"
     )
 
@@ -42,11 +63,12 @@ def stream_answer(
     retrieved: list[tuple[Chunk, float]],
     provider: Provider | None = None,
     length: str = prompts.DEFAULT_LENGTH,
+    history: list[dict] | None = None,
 ) -> Iterator[str]:
     """Answer from the excerpts, with citations. Yields text as it arrives."""
     provider = provider or get_provider()
     yield from provider.stream(
-        prompts.rag_system(length), build_prompt(question, retrieved)
+        prompts.rag_system(length), build_prompt(question, retrieved, history)
     )
 
 

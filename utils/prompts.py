@@ -73,6 +73,11 @@ Rules, in order:
 4. Never attach [n] to a claim its excerpt does not support. An uncited
    sentence under the heading is correct; a miscited one is a serious error.
 
+5. The conversation so far, where one is given, is there to tell you what the
+   question means - what "that" refers to, what was already answered. It is
+   not evidence. Never cite it, and never treat something you said earlier as
+   though it came from the documents.
+
 {length}"""
 
 DIRECT_SYSTEM = """You are answering from your own knowledge.
