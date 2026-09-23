@@ -14,6 +14,14 @@ rapidocr-onnxruntime>=1.3   # the OCR itself, models bundled
 sentence-transformers>=3.3
 numpy>=1.26
 
+# LangChain, for the two pieces where it is a straight win: the text splitter
+# and the embedding wrapper. The standalone packages, not langchain-community,
+# which is being sunset. See the README for what it is deliberately not used
+# for.
+langchain-core>=0.3
+langchain-text-splitters>=0.3
+langchain-huggingface>=0.1
+
 python-dotenv>=1.0
 
 # --- Answer providers ------------------------------------------------------

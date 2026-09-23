@@ -275,6 +275,40 @@ because the words "name" and "contact" appear nowhere in a resume.
 So when the index is under `FULL_CONTEXT_WORDS`, everything is sent and the
 model decides what is relevant. Retrieval only kicks in above that size.
 
+## Where LangChain is used, and where it is not
+
+Two pieces of the pipeline are LangChain's, because they are strictly better
+or exactly equal and save writing code that has already been written:
+
+| | |
+|---|---|
+| `RecursiveCharacterTextSplitter` | Given a word-counting length function, so the limit it respects is the embedding model's token budget rather than a character count. It prefers a paragraph break, then a sentence, then a word - the fixed window it replaced closed at exactly 160 words wherever that fell, ending chunks "...before 10:00" and "...A". |
+| `HuggingFaceEmbeddings` | Wraps the same sentence-transformers model and returns bit-for-bit identical vectors. Checked, not assumed. |
+
+**Measured after the swap: 24/24 hit@2, MRR 1.000 - the same as before.** The
+tidier chunk boundaries did not change what gets retrieved on a corpus this
+size, so they are a readability win rather than an accuracy one, and are not
+claimed as more than that.
+
+Three other pieces stayed hand-written, each because LangChain's equivalent
+would have cost something already built and tested:
+
+- **BM25.** `BM25Retriever` returns documents with no score attached. Ranking
+  here blends BM25 against cosine, which needs a number per chunk, and the
+  stopword handling that stops a rare "the" dragging unrelated chunks up the
+  ranking has no equivalent.
+- **The providers.** `ChatGoogleGenerativeAI` takes one model. This falls
+  through five when the daily free-tier quota on one is exhausted, reads the
+  `retryDelay` the API supplies rather than guessing, and says which quota was
+  hit. That is the difference between the free tier being usable and not.
+- **The vector store.** The index is paired with a metadata store that
+  identifies documents by content hash and removes one document's chunks
+  without disturbing the rest.
+
+`langchain-community` is avoided entirely: it prints a deprecation notice
+saying it is being sunset and no longer maintained. The standalone
+`langchain-*` packages are used instead.
+
 ## Why FAISS and not pgvector
 
 | | FAISS | pgvector |
