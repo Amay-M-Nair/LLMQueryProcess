@@ -741,6 +741,8 @@ if question:
                 question,
                 history=st.session_state.history,
                 length=st.session_state.length,
+                provider_name=provider_name,
+                api_key=st.session_state.api_keys.get(provider_name) or None,
             ):
                 kind = event.get("type")
 

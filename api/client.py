@@ -41,7 +41,8 @@ class Client(Protocol):
     def describe(self, collection: str) -> dict: ...
     def add_documents(self, collection: str, files, on_progress=None) -> IngestResult: ...
     def clear(self, collection: str) -> None: ...
-    def ask(self, collection, question, history, length, on_stage=None) -> Iterator[dict]: ...
+    def ask(self, collection, question, history, length,
+            provider_name=None, api_key=None, on_stage=None) -> Iterator[dict]: ...
 
 
 class LocalClient:
@@ -67,13 +68,19 @@ class LocalClient:
 
         collections.clear(collection)
 
-    def ask(self, collection, question, history, length, on_stage=None) -> Iterator[dict]:
+    def ask(self, collection, question, history, length,
+            provider_name=None, api_key=None, on_stage=None) -> Iterator[dict]:
         from api import collections
         from backend.llm import get_provider
         from backend.query_processor import process
 
         store = collections.load(collection)
-        provider = get_provider(config.PROVIDER)
+        # Both arguments matter and neither can be guessed from config:
+        # the provider is whichever the sidebar has selected, and the key
+        # may have been typed into the page rather than set in .env. A
+        # deployed copy has no .env at all, so dropping the key here left
+        # the sidebar reporting Ready and every question failing.
+        provider = get_provider(provider_name or config.PROVIDER, api_key=api_key or None)
 
         stages: list[str] = []
         plan = process(
@@ -159,7 +166,12 @@ class HttpClient:
         with self._client() as http:
             http.delete(f"/collections/{collection}").raise_for_status()
 
-    def ask(self, collection, question, history, length, on_stage=None) -> Iterator[dict]:
+    def ask(self, collection, question, history, length,
+            provider_name=None, api_key=None, on_stage=None) -> Iterator[dict]:
+        # api_key is accepted and never sent. A key typed into this page
+        # belongs to whoever typed it; handing it to a remote service
+        # would disclose it to a third party. A service answers with its
+        # own key and its own choice of provider.
         form = {
             "question": question,
             "history": json.dumps(history or []),
