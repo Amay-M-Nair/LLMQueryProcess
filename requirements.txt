@@ -11,6 +11,16 @@ pymupdf>=1.24          # rasterises pages; no system dependency
 rapidocr-onnxruntime>=1.3   # the OCR itself, models bundled
 
 # Embeddings - run locally and cost nothing
+#
+# torch comes in via sentence-transformers, and on Linux the wheel PyPI hands
+# out bundles the CUDA runtime: about 2.5 GB of NVIDIA libraries for a machine
+# that has no GPU. Every host this deploys to is CPU-only, so ask for the CPU
+# build by name. The +cpu version sorts above the plain one, so pip prefers it
+# from this index without needing a pin. On Windows PyPI's wheel is already
+# CPU-only and this changes nothing.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+
 sentence-transformers>=3.3
 numpy>=1.26
 
