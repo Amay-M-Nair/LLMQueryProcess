@@ -12,6 +12,7 @@ running, so dark mode is those tokens rendered as CSS over the base theme in
 
 import os
 import re
+import secrets
 
 import streamlit as st
 
@@ -421,7 +422,35 @@ def render_trace(trace: dict) -> None:
 # calls it in this process or reaches a running api.main over HTTP - set
 # API_URL in utils/config.py to choose. Neither is visible from here.
 client = get_client()
-COLLECTION = config.DEFAULT_COLLECTION
+def collection_for_session() -> str:
+    """Which index this browser session reads and writes.
+
+    Shared is right on one machine and wrong on a URL: one collection means
+    every visitor retrieves every other visitor's documents, and the answer
+    cites them. Per-visitor costs re-uploading after a refresh and is the only
+    setting that can be exposed.
+    """
+    if config.COLLECTION_MODE != "visitor":
+        return config.DEFAULT_COLLECTION
+
+    if "collection" not in st.session_state:
+        # Long enough that it cannot be guessed by someone wanting to read
+        # another visitor's documents.
+        st.session_state.collection = "v" + secrets.token_hex(16)
+    return st.session_state.collection
+
+
+# Refusing to start beats leaking: a public deployment left on "shared" hands
+# every visitor the same documents, and nothing on the page would say so.
+if config.PUBLIC and config.COLLECTION_MODE != "visitor":
+    st.error(
+        "AZRIEL_PUBLIC is set but AZRIEL_COLLECTIONS is not 'visitor'. "
+        "Every visitor would share one index and read each other's documents. "
+        "Set AZRIEL_COLLECTIONS=visitor."
+    )
+    st.stop()
+
+COLLECTION = collection_for_session()
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -611,6 +640,9 @@ with st.sidebar:
         # already-rendered sidebar in the old palette.
         st.session_state.theme = chosen
         st.rerun()
+
+    if config.COLLECTION_MODE == "visitor":
+        st.caption("Your documents are private to this tab and go when it closes.")
 
     st.session_state.length = st.select_slider(
         "Answer length",

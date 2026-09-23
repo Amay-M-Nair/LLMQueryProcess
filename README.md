@@ -409,98 +409,67 @@ covered too.
 
 ## Deploying it
 
-Not done, and the reason is worth stating plainly rather than leaving as a
-surprise.
+### The one thing to get right
 
-### The blocker
+On your own machine every visitor is you, so one shared index is correct and
+your documents are still there tomorrow. On a URL it is a document leak:
+everyone reads everyone else's files, and the answers cite them.
 
-`data/index` is a single index. Deployed publicly, every visitor's uploads
-land in it, so one person's question retrieves and cites another person's
-documents. That is a privacy leak, not a rough edge, and it is the thing to
-fix before a link goes anywhere.
+So the page has two modes, and hosting it means picking the second:
 
-Streamlit cannot fix it: it has sessions but no users, and a document has to
-belong to someone. Scoping documents to a person needs authentication, which
-is where a web framework earns its place.
+```
+AZRIEL_COLLECTIONS=visitor   a fresh collection per browser session
+AZRIEL_PUBLIC=1              refuse to start if the above is not set
+```
 
-### What deployment changes about the design
+`AZRIEL_PUBLIC` exists because the failure is silent. A deployment left on
+shared looks perfectly normal until two people use it, and nothing on the
+page says otherwise - so it stops rather than serves. The Dockerfile sets
+both.
 
-Two decisions taken for local use invert once the app is hosted, which is
-worth knowing before reading them as mistakes.
+Visitor collections are forgotten when the tab closes. That is the trade:
+uploading again after a refresh, in exchange for documents that are nobody
+else's business.
 
-| | Local (what this is) | Deployed |
+### Docker
+
+```bash
+docker build -t azriel .
+```
+
+```bash
+docker run -p 8501:8501 -e GOOGLE_API_KEY=... azriel
+```
+
+The image bakes the embedding model in, so the first question after a deploy
+does not wait on a 90 MB download - and works at all on a host with no route
+to HuggingFace. It builds to roughly 2 GB, most of it torch.
+
+The same image runs the API:
+
+```bash
+docker run -p 8000:8000 -e GOOGLE_API_KEY=... azriel   python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+### Somewhere to put it
+
+| | Free tier | Fit |
 |---|---|---|
-| Embeddings | local MiniLM - free, offline, no quota | **API embeddings**, which removes `torch` entirely |
-| Vector store | a FAISS file | **pgvector**, so `WHERE user_id = ...` and the similarity search are one query |
+| **Hugging Face Spaces** | 16 GB memory | **Best.** Native Streamlit, secrets in settings, built for dependencies this size |
+| **Render / Railway** | limited, then paid | Docker and a persistent disk. What to use if the API's named collections must survive a restart |
+| **Streamlit Community Cloud** | ~1 GB memory | Tight. The install is ~720 MB before the model, so it may not start |
 
-Neither was wrong. Locally, API embeddings would exhaust a 20-a-day quota
-before a single question could be asked. Hosted, with per-user data, `torch`
-is 531 MB of dead weight in a web process and FAISS becomes one index file per
-person to manage by hand. The [FAISS and pgvector](#why-faiss-and-not-pgvector)
-comparison above describes exactly this case.
+Set `GOOGLE_API_KEY` as a secret in the host's settings, never in the image.
+`python-dotenv` falls back to real environment variables, so nothing in the
+code changes.
 
-Dependency weight is the practical obstacle either way: `torch` 531 MB,
-everything else about 90 MB, plus a 90 MB model download on first run.
-Dropping local embeddings removes most of it.
+### What is still true after deploying
 
-### The shape it would take
-
-```
-Browser  ->  Django (auth, sessions, uploads, streaming views)
-               |
-             backend/ ingestion/ vectorstore/     <- unchanged
-               |
-             Postgres + pgvector   ·   Gemini API
-```
-
-**The layers already separate correctly.** `backend.query_processor.process()`
-does not know Streamlit exists - it takes a question and returns a plan - so a
-view would call it the same way `app.py` does:
-
-```python
-def ask(request):
-    plan = process(
-        request.POST["question"],
-        store=store_for(request.user),
-        history=request.session.get("history", []),
-        provider=get_provider("gemini"),
-    )
-    return StreamingHttpResponse(plan.stream(), content_type="text/plain")
-```
-
-Only `app.py` is replaced.
-
-### Django or FastAPI
-
-The original plan named FastAPI, and for a thin JSON API it is the better fit:
-lighter, async by default, OpenAPI documentation for free. Django is the
-better fit here because the problem is not the API - it is users, sessions and
-per-user storage, which `django.contrib.auth` and the ORM provide outright.
-Pick FastAPI if the front end is separate and there is no login; pick Django if
-accounts are the point.
-
-### Steps
-
-1. `pip install django psycopg[binary] pgvector gunicorn whitenoise`
-2. `django-admin startproject azriel` beside the existing packages
-3. Models: `Document(user, name, content_hash, pages)` and
-   `Chunk(document, text, page, chunk_id, embedding=VectorField(384))`
-4. `vectorstore/pgvector_store.py` implementing the same `add` / `search` /
-   `remove_document` interface - nothing above it changes
-5. An API-backed embedder behind the same `embed()` signature
-6. Views for upload, ask (streaming), and history
-7. `GOOGLE_API_KEY`, `SECRET_KEY` and `DATABASE_URL` from the environment
-8. Render or Railway, both of which offer managed Postgres with pgvector
-
-**`DEBUG = False` and a real `ALLOWED_HOSTS` before the link is shared.**
-Django's debug pages print the environment, API keys included.
-
-### If you only want a demo
-
-Hosting the Streamlit app as-is is fine provided the link is yours alone.
-Hugging Face Spaces suits it best - 16 GB of memory, native Streamlit support,
-secrets in the settings rather than in `.env`. Streamlit Community Cloud is
-the easier integration but its free memory limit is tight against 620 MB of
-dependencies. Either way, the filesystem is ephemeral: the index is lost on
-restart, and the shared-index problem above still applies.
+- **The filesystem is ephemeral** unless you mount a disk. For the page's
+  visitor collections that is the intent; for the API's named collections it
+  means an index disappears when the container is replaced.
+- **One free-tier key serves every visitor.** The sidebar lets someone bring
+  their own, which is the only thing that scales past twenty questions a day.
+- **The model reads figures but does not understand them** - see the limits
+  below, because that one produces confident wrong answers rather than errors.
 

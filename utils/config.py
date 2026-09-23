@@ -1,5 +1,6 @@
 """Every tunable number in the project, in one place."""
 
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -103,6 +104,20 @@ API_URL = None
 # The namespace documents are kept under. Each collection has its own index,
 # and no collection can retrieve another's documents.
 DEFAULT_COLLECTION = "default"
+
+# Which collection the web page uses.
+#
+#   "shared"   one collection for everybody. Right on your own machine: your
+#              documents are still there tomorrow.
+#   "visitor"  a fresh collection per browser session, forgotten when the tab
+#              closes. The only safe setting for a public URL, because
+#              "shared" means every visitor reads every other visitor's files.
+#
+# Set AZRIEL_COLLECTIONS=visitor when hosting this anywhere other people can
+# reach. There is a check in app.py that refuses to start shared when
+# AZRIEL_PUBLIC=1.
+COLLECTION_MODE = os.environ.get("AZRIEL_COLLECTIONS", "shared")
+PUBLIC = os.environ.get("AZRIEL_PUBLIC", "0") == "1"
 
 
 # --- Logging ---------------------------------------------------------------
