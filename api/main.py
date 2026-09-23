@@ -19,7 +19,7 @@ import json
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, Path as PathParam, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 
 from api import collections
 from api.collections import BadCollectionName
@@ -53,6 +53,18 @@ def _name(collection: str) -> str:
         return collections.normalise(collection)
     except BadCollectionName as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    """Send a browser to the documentation.
+
+    Opening the root of an API in a browser is something people do, and
+    FastAPI's answer by default is {"detail": "Not Found"}, which is correct
+    and tells you nothing. Whoever typed the address wanted to see what is
+    here; /docs is what they were looking for.
+    """
+    return RedirectResponse("/docs")
 
 
 @app.get("/health", tags=["status"])

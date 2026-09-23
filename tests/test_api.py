@@ -179,3 +179,14 @@ def test_the_openapi_document_is_generated(client):
     schema = client.get("/openapi.json").json()
     assert schema["info"]["title"] == "Azriel"
     assert "/collections/{collection}/ask" in schema["paths"]
+
+
+def test_the_root_sends_a_browser_to_the_docs(client):
+    """The default answer there is {"detail":"Not Found"}, which helps nobody."""
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code in (302, 307)
+    assert response.headers["location"] == "/docs"
+
+
+def test_the_docs_page_renders(client):
+    assert client.get("/docs").status_code == 200
